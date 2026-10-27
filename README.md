@@ -4,6 +4,12 @@ A phone app (PWA) that replaces the paper money in property-trading board games.
 
 **Play now: https://board-banker-26.web.app**. There's nothing to install and no sign-up: everyone opens the link on their own phone, and can add it to the home screen to use it like an app. The setup below is only needed to host your own copy.
 
+| <img src="docs/screenshots/home.png" width="250" alt="Home screen"> | <img src="docs/screenshots/invite.png" width="250" alt="Invite QR code"> | <img src="docs/screenshots/wallet.png" width="250" alt="Player wallet"> |
+|:-:|:-:|:-:|
+| Start or join a game | Players scan to join | Each player's wallet |
+| <img src="docs/screenshots/get-paid.png" width="250" alt="Payment QR code"> | <img src="docs/screenshots/go-salary.png" width="250" alt="GO salary approval"> | <img src="docs/screenshots/bank.png" width="250" alt="Bank tab"> |
+| Get paid with a single-use QR | The banker approves GO salary | Bank tab and activity log |
+
 Built with Ionic + Angular, Firebase (Firestore + anonymous auth) and Firebase Hosting.
 
 ## First-time Firebase setup
