@@ -4,7 +4,9 @@
 
 A phone app (PWA) that replaces the paper money in property-trading board games. The banker starts a game and shows a QR code; 2 to 8 players join with their own phones. Players pay each other by showing and scanning payment QR codes, ask the banker for their GO salary (the banker approves it in a pop-up), and pay the bank. The banker pays out from the bank, corrects balances, reverses mistakes and ends the game.
 
-**Play now: https://board-banker-26.web.app**. There's nothing to install and no sign-up: everyone opens the link on their own phone, and can add it to the home screen to use it like an app. The setup below is only needed to host your own copy.
+[![Play now](https://img.shields.io/badge/Play_now-15803d?style=for-the-badge)](https://board-banker-26.web.app)
+
+There's nothing to install and no sign-up: everyone opens the link on their own phone, and can add it to the home screen to use it like an app. The setup below is only needed to host your own copy.
 
 | <img src="docs/screenshots/home.png" width="250" alt="Home screen"> | <img src="docs/screenshots/invite.png" width="250" alt="Invite QR code"> | <img src="docs/screenshots/wallet.png" width="250" alt="Player wallet"> |
 |:-:|:-:|:-:|
