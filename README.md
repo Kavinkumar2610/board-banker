@@ -59,16 +59,4 @@ The 6-character game code is the invite: a game can only be opened by its code, 
 
 ## Data cleanup
 
-Every record in a game carries `expireAt`, 7 days after the game was created (`KEEP_DAYS` in `src/app/money.ts`; the rules accept 1 to 8 days and require children to match their game).
-
-- **Now (Spark, free plan):** when a banker creates a game, the app deletes up to 5 games that expired more than a day ago (`sweepExpired` in `src/app/game.service.ts`). The rules let anyone signed in list and delete only expired records.
-- **Later, on the Blaze plan:** Firestore can do this by itself with TTL policies. Put this in `firestore.indexes.json`, run `firebase deploy --only firestore:indexes`, then delete `sweepExpired`:
-
-```json
-"fieldOverrides": [
-  { "collectionGroup": "games", "fieldPath": "expireAt", "ttl": true, "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION" }] },
-  { "collectionGroup": "players", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
-  { "collectionGroup": "requests", "fieldPath": "expireAt", "ttl": true, "indexes": [] },
-  { "collectionGroup": "txns", "fieldPath": "expireAt", "ttl": true, "indexes": [] }
-]
-```
+Game data expires 7 days after the game is created (`KEEP_DAYS` in `src/app/money.ts`), and expired games are cleared out automatically.
