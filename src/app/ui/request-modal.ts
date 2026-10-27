@@ -94,7 +94,6 @@ export class RequestModal implements OnDestroy {
 
   private reqId?: string;
   private unsub?: Unsubscribe;
-  private wake?: WakeLockSentinel;
   private timer?: ReturnType<typeof setTimeout>;
 
   constructor() {
@@ -120,8 +119,6 @@ export class RequestModal implements OnDestroy {
         this.stopWaiting();
         this.timer = setTimeout(() => this.modalCtrl.dismiss(true, 'done'), 2200);
       });
-      // Keep the screen awake while the other player gets their camera out.
-      this.wake = await navigator.wakeLock?.request('screen').catch(() => undefined);
     } catch (e) {
       this.error.set(errorText(e));
     } finally {
@@ -149,7 +146,5 @@ export class RequestModal implements OnDestroy {
     this.unsub = undefined;
     if (this.reqId && this.step() === 'qr') void this.bank.cancelRequest(this.reqId);
     this.reqId = undefined;
-    void this.wake?.release().catch(() => undefined);
-    this.wake = undefined;
   }
 }

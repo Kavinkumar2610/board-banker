@@ -170,3 +170,28 @@ export const prefs = {
 };
 
 export const buzz = (ms: number | number[] = 12) => navigator.vibrate?.(ms);
+
+/**
+ * Keeps the screen on until the returned function is called. The OS drops the lock whenever the app is hidden,
+ * so it's retaken when the app comes back, or on the next tap where Safari only grants it right after one.
+ */
+export function keepAwake(): () => void {
+  let lock: WakeLockSentinel | undefined;
+  let asking = false;
+  let on = true;
+  const take = async () => {
+    if (!on || asking || document.hidden || (lock && !lock.released)) return;
+    asking = true;
+    lock = await navigator.wakeLock?.request('screen').catch(() => undefined);
+    asking = false;
+    if (!on) void lock?.release().catch(() => undefined);
+  };
+  const events = ['visibilitychange', 'pointerdown'];
+  events.forEach(e => document.addEventListener(e, take));
+  void take();
+  return () => {
+    on = false;
+    events.forEach(e => document.removeEventListener(e, take));
+    void lock?.release().catch(() => undefined);
+  };
+}

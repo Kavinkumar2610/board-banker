@@ -4,7 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import {
   ActionSheetButton, ActionSheetController, AlertController, IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonIcon,
   IonInput, IonLabel, IonSegment, IonSegmentButton, IonSpinner, IonTitle, IonToolbar, ModalController, NavController,
-  ToastController,
+  ToastController, ViewDidEnter, ViewWillLeave,
 } from '@ionic/angular';
 import { addIcons } from 'ionicons';
 import {
@@ -16,7 +16,7 @@ import QRCode from 'qrcode';
 import { GameService, errorText } from '../game.service';
 import {
   BankError, CURRENCIES, GoRequest, Kind, MAX_PLAYERS, MIN_PLAYERS, Player, Txn, buzz, cleanCode, currencyOf, deltaFor, fmt, joinUrl,
-  parseQr, prefs, signed, txnText, undoable,
+  keepAwake, parseQr, prefs, signed, txnText, undoable,
 } from '../money';
 import { Avatar } from '../ui/avatar';
 import { MoneyModal, Party, Payer } from '../ui/money-modal';
@@ -34,7 +34,7 @@ type MoneyField = 'startingCash' | 'salary' | 'debtLimit';
     IonSpinner, IonInput, DatePipe, NgTemplateOutlet, RouterLink, Avatar,
   ],
 })
-export class GamePage {
+export class GamePage implements ViewDidEnter, ViewWillLeave {
   /** Route param /game/:code */
   readonly code = input.required<string>();
   /** Query param ?pay=REQUEST_ID from a payment QR opened with the phone camera. */
@@ -115,6 +115,7 @@ export class GamePage {
   private ending = false;
   private goPopup: { id: string; alert?: HTMLIonAlertElement } | null = null;
   private watchedGo?: { id: string; unsub: () => void };
+  private stopAwake?: () => void;
 
   constructor() {
     addIcons({
@@ -281,6 +282,15 @@ export class GamePage {
   }
 
   // ---- navigation & menu -------------------------------------------------------------------
+
+  // The screen stays on for the whole game: phones sit on the table between turns.
+  ionViewDidEnter() {
+    this.stopAwake = keepAwake();
+  }
+
+  ionViewWillLeave() {
+    this.stopAwake?.();
+  }
 
   protected home(forget = false) {
     if (forget) prefs.set('game', null);

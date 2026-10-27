@@ -1,4 +1,6 @@
-import { Player, Txn, deltaFor, fmt, isCode, newCode, parseQr, quotaReset, rank, setCurrency, signed, txnText, undoable } from './money';
+import {
+  Player, Txn, deltaFor, fmt, isCode, keepAwake, newCode, parseQr, quotaReset, rank, setCurrency, signed, txnText, undoable,
+} from './money';
 
 const p = (id: string, balance: number, bankrupt = false, bankruptAt?: number): Player =>
   ({ id, name: id, color: 0, balance, bankrupt, bankruptAt });
@@ -59,5 +61,28 @@ describe('money', () => {
     expect(at('2026-10-27T03:00:00.250Z')).toBe('2026-10-27T07:00:00.250Z'); // summer time, UTC−7: 3 PM in Malaysia
     expect(at('2026-11-10T03:00:00Z')).toBe('2026-11-10T08:00:00.000Z'); // winter time, UTC−8: 4 PM in Malaysia
     expect(at('2026-11-10T08:00:00Z')).toBe('2026-11-11T08:00:00.000Z'); // just reset: the next one is a day away
+  });
+
+  it('keeps the screen awake, retaking the lock after the OS drops it', async () => {
+    const locks: { released: boolean }[] = [];
+    Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: {
+      request: async () => {
+        const lock = { released: false, release: async () => { lock.released = true; } };
+        locks.push(lock);
+        return lock;
+      },
+    } });
+    const tap = async () => { document.dispatchEvent(new Event('pointerdown')); await new Promise(r => setTimeout(r)); };
+
+    const stop = keepAwake();
+    await tap();
+    expect(locks.length).toBe(1); // still held: a tap doesn't take a second lock
+    locks[0].released = true; // the OS dropped it while the app was hidden
+    await tap();
+    expect(locks.length).toBe(2); // retaken on the next tap
+    stop();
+    expect(locks[1].released).toBe(true);
+    await tap();
+    expect(locks.length).toBe(2); // stopped: no more requests
   });
 });
