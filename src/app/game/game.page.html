@@ -38,9 +38,10 @@
       @case ('missing') {
         <div class="state">
           <ion-icon name="search-outline" aria-hidden="true" />
-          <h1 class="page-title">Game not found</h1>
+          <h1 class="page-title">{{ bank.error() ? 'Can’t open the game' : 'Game not found' }}</h1>
           <p class="lede">{{ bank.error() || 'Check the code with your banker, or start a new game.' }}</p>
-          <ion-button expand="block" size="large" (click)="home(true)">Back to home</ion-button>
+          <!-- Keep the game on the home screen unless it's really gone, so players can resume after an error. -->
+          <ion-button expand="block" size="large" (click)="home(!bank.error())">Back to home</ion-button>
         </div>
       }
 

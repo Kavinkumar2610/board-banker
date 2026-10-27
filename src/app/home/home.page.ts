@@ -4,7 +4,7 @@ import { AlertController, IonButton, IonContent, IonIcon, ModalController, Toast
 import { addIcons } from 'ionicons';
 import { alertCircle, businessOutline, chevronForward, downloadOutline, scanOutline } from 'ionicons/icons';
 import { GameService, errorText } from '../game.service';
-import { Status, parseQr, prefs } from '../money';
+import { BankError, Status, parseQr, prefs } from '../money';
 import { ScanModal } from '../ui/scan-modal';
 
 @Component({
@@ -48,7 +48,8 @@ export class HomePage implements ViewWillEnter {
       if (member && game.status !== 'ended') this.resume.set({ code, status: game.status });
       else this.forget();
     } catch (e) {
-      if (navigator.onLine) this.forget();
+      // Only a missing game is a reason to forget it; a network or quota error keeps the shortcut.
+      if (e instanceof BankError) this.forget();
     }
   }
 

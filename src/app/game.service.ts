@@ -6,7 +6,8 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import {
-  BankError, CURRENCIES, Game, GoRequest, KEEP_DAYS, Kind, MAX_PLAYERS, PayRequest, Player, TOKENS, Txn, fmt, newCode, rank, setCurrency,
+  BankError, CURRENCIES, Game, GoRequest, KEEP_DAYS, Kind, MAX_PLAYERS, PayRequest, Player, TOKENS, Txn, fmt, newCode, quotaReset, rank,
+  setCurrency,
 } from './money';
 
 interface BeforeInstallPromptEvent extends Event { prompt(): Promise<void> }
@@ -28,7 +29,7 @@ export class GameService {
   readonly players = signal<Player[]>([]);
   /** True once the first players snapshot has arrived, so membership is known. */
   readonly synced = signal(false);
-  /** Set when we can't even sign in (e.g. anonymous auth disabled in Firebase). */
+  /** Set when we can't sign in or read the game (e.g. anonymous auth disabled, or the free daily quota used up). */
   readonly error = signal('');
   readonly txns = signal<Txn[]>([]);
   /** Open "I passed GO" requests waiting for the banker, oldest first. */
@@ -90,7 +91,7 @@ export class GameService {
         const game = s.exists() ? (s.data() as Game) : null;
         setCurrency(game?.currency); // before the signal fires, so every amount renders in it
         this.game.set(game);
-      }, () => this.game.set(null)),
+      }, e => { this.error.set(errorText(e)); this.game.set(null); }),
       onSnapshot(collection(g, 'players'), s => {
         this.players.set(s.docs.map(d => ({ ...(d.data() as Omit<Player, 'id'>), id: d.id })));
         this.synced.set(true);
@@ -355,6 +356,11 @@ export function errorText(e: unknown): string {
   console.error(e);
   const code = String((e as { code?: string })?.code ?? '');
   if (!navigator.onLine || code.includes('unavailable')) return 'Can’t reach the bank. Check your connection and try again.';
+  if (code.includes('resource-exhausted')) {
+    const reset = quotaReset();
+    const when = (reset.getDate() === new Date().getDate() ? '' : 'tomorrow ') + reset.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return `Board Banker has used up its free capacity for today. Games and balances are safe. Try again after ${when}.`;
+  }
   if (code.includes('permission-denied')) return 'The bank refused that. The game may have changed, so try again.';
   if (code.includes('operation-not-allowed') || code.includes('admin-restricted') || code.includes('configuration-not-found')) {
     return 'Sign-in isn’t enabled for this app yet. The app owner needs to turn on Anonymous sign-in in Firebase.';

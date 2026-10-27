@@ -1,4 +1,4 @@
-import { Player, Txn, deltaFor, fmt, isCode, newCode, parseQr, rank, setCurrency, signed, txnText, undoable } from './money';
+import { Player, Txn, deltaFor, fmt, isCode, newCode, parseQr, quotaReset, rank, setCurrency, signed, txnText, undoable } from './money';
 
 const p = (id: string, balance: number, bankrupt = false, bankruptAt?: number): Player =>
   ({ id, name: id, color: 0, balance, bankrupt, bankruptAt });
@@ -52,5 +52,12 @@ describe('money', () => {
     const name = (id: string | null) => id ?? 'Bank';
     expect(txnText(t('pay', 'me', 'bob', 5), name, 'me')).toBe('You paid bob');
     expect(txnText(t('adjust', null, 'me', 5), name, 'me')).toBe('Banker corrected your balance');
+  });
+
+  it('knows when the free quota resets (midnight US Pacific)', () => {
+    const at = (iso: string) => quotaReset(new Date(iso)).toISOString();
+    expect(at('2026-10-27T03:00:00.250Z')).toBe('2026-10-27T07:00:00.250Z'); // summer time, UTC−7: 3 PM in Malaysia
+    expect(at('2026-11-10T03:00:00Z')).toBe('2026-11-10T08:00:00.000Z'); // winter time, UTC−8: 4 PM in Malaysia
+    expect(at('2026-11-10T08:00:00Z')).toBe('2026-11-11T08:00:00.000Z'); // just reset: the next one is a day away
   });
 });

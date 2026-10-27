@@ -70,6 +70,15 @@ export type GoRequest = PayRequest & { id: string };
 /** An error whose message is safe to show the player as-is. */
 export class BankError extends Error {}
 
+/** When Firebase's free daily quota resets: the next midnight, US Pacific time. */
+export function quotaReset(now = new Date()): Date {
+  const [h, m, s] = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles', hourCycle: 'h23', hour: 'numeric', minute: 'numeric', second: 'numeric',
+  }).formatToParts(now).filter(p => p.type !== 'literal').map(p => Number(p.value));
+  // ponytail: an hour out on the two US clock-change days; good enough for "try again after".
+  return new Date(now.getTime() + ((24 - h) * 3600 - m * 60 - s) * 1000);
+}
+
 /** Classic property-group colours, one per seat; fg keeps the initial readable. */
 export const TOKENS = [
   { bg: '#955436', fg: '#ffffff' },
