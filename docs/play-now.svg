@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="56" viewBox="0 0 180 56" role="img" aria-label="Play now">
+  <title>Play now</title>
+  <style>
+    .ring { transform-box: fill-box; transform-origin: center; animation: ring 2s ease-out infinite; }
+    @keyframes ring { from { opacity: .7; transform: scale(1); } to { opacity: 0; transform: scale(1.1, 1.4); } }
+    .shine { animation: shine 3s ease-in-out infinite; }
+    @keyframes shine { 0%, 55% { transform: translateX(-60px); } 100% { transform: translateX(240px); } }
+    @media (prefers-reduced-motion: reduce) { .ring { animation: none; opacity: 0; } .shine { animation: none; opacity: 0; } }
+  </style>
+  <defs>
+    <clipPath id="btn"><rect x="10" y="10" width="160" height="36" rx="10"/></clipPath>
+    <linearGradient id="gloss" x1="0" x2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset=".5" stop-color="#fff" stop-opacity=".4"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect class="ring" x="10" y="10" width="160" height="36" rx="10" fill="none" stroke="#22c55e" stroke-width="2"/>
+  <rect x="10" y="10" width="160" height="36" rx="10" fill="#15803d"/>
+  <g clip-path="url(#btn)"><g transform="skewX(-20)"><rect class="shine" x="0" y="0" width="40" height="56" fill="url(#gloss)"/></g></g>
+  <path d="M50 21 L50 35 L62 28 Z" fill="#fff"/>
+  <text x="70" y="34" fill="#fff" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="700">Play now</text>
+</svg>
