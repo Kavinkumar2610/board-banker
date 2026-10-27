@@ -1,0 +1,7 @@
+{
+  "name": "Monopoly Bank",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular-standalone"
+}
