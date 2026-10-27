@@ -1,0 +1,46 @@
+// The native input lives inside ion-input, outside this component's style scope.
+:host ::ng-deep .code-input .native-input {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+.code-input { margin-bottom: 4px; }
+
+.scan-link {
+  margin: 0 0 16px -8px;
+}
+
+.found-skeleton {
+  height: 84px;
+}
+
+.found {
+  margin-bottom: 20px;
+}
+
+.found-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.found-players {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.chip-player {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 4px;
+  border-radius: 999px;
+  background: var(--mb-surface-2);
+  font-size: 14px;
+  font-weight: 600;
+}

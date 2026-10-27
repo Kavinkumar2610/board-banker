@@ -9,10 +9,6 @@ module.exports = tseslint.config(
     extends: [...angular.configs.tsRecommended],
     processor: angular.processInlineTemplates,
     rules: {
-      "@angular-eslint/component-class-suffix": [
-        "error",
-        { suffixes: ["Page", "Component"] },
-      ],
       "@angular-eslint/component-selector": [
         "error",
         { type: "element", prefix: "app", style: "kebab-case" },

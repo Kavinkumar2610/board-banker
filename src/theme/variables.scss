@@ -1,2 +1,97 @@
-// For information on how to create your own theme, please refer to:
-// https://ionicframework.com/docs/theming/
+// Design tokens. Always dark: felt green + gold on navy, like a game table at night.
+// Selectors match Ionic's dark palette (:root.ios / :root.md) so these win over it.
+:root,
+:root.ios,
+:root.md {
+  --mb-bg: #0b1220;
+  --mb-surface: #141d30;
+  --mb-surface-2: #1c2740;
+  --mb-surface-3: #26334f;
+  --mb-border: rgba(255, 255, 255, 0.09);
+  --mb-text: #f8fafc;
+  --mb-muted: #a3b0c4;
+  --mb-felt: #15803d;
+  --mb-gold: #f5b014;
+  --mb-gold-ink: #1c1404;
+  --mb-pos: #4ade80;
+  --mb-neg: #f87171;
+  --mb-radius-lg: 24px;
+  --mb-radius: 18px;
+  --mb-radius-sm: 12px;
+  --mb-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 10px 28px rgba(0, 0, 0, 0.35);
+  --mb-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --mb-font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mb-display: 'Calistoga', Georgia, serif;
+
+  --ion-font-family: var(--mb-font);
+  --ion-background-color: var(--mb-bg);
+  --ion-background-color-rgb: 11, 18, 32;
+  --ion-text-color: var(--mb-text);
+  --ion-text-color-rgb: 248, 250, 252;
+  --ion-toolbar-background: var(--mb-bg);
+  --ion-toolbar-border-color: transparent;
+  --ion-item-background: transparent;
+  --ion-card-background: var(--mb-surface);
+  --ion-border-color: var(--mb-border);
+  --ion-placeholder-color: #7d8aa0;
+
+  --ion-color-primary: #15803d;
+  --ion-color-primary-rgb: 21, 128, 61;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: #12713a;
+  --ion-color-primary-tint: #2c8d50;
+
+  --ion-color-secondary: #f5b014;
+  --ion-color-secondary-rgb: 245, 176, 20;
+  --ion-color-secondary-contrast: #1c1404;
+  --ion-color-secondary-contrast-rgb: 28, 20, 4;
+  --ion-color-secondary-shade: #d89b12;
+  --ion-color-secondary-tint: #f6b82c;
+
+  --ion-color-success: #22c55e;
+  --ion-color-success-rgb: 34, 197, 94;
+  --ion-color-success-contrast: #0b1220;
+  --ion-color-success-contrast-rgb: 11, 18, 32;
+  --ion-color-success-shade: #1ead53;
+  --ion-color-success-tint: #38cb6e;
+
+  --ion-color-danger: #dc2626;
+  --ion-color-danger-rgb: 220, 38, 38;
+  --ion-color-danger-contrast: #ffffff;
+  --ion-color-danger-contrast-rgb: 255, 255, 255;
+  --ion-color-danger-shade: #c22121;
+  --ion-color-danger-tint: #e03c3c;
+
+  --ion-color-medium: #a3b0c4;
+  --ion-color-medium-rgb: 163, 176, 196;
+  --ion-color-medium-contrast: #0b1220;
+  --ion-color-medium-contrast-rgb: 11, 18, 32;
+  --ion-color-medium-shade: #8f9bac;
+  --ion-color-medium-tint: #acb8ca;
+
+  --ion-color-light: #f8fafc;
+  --ion-color-light-rgb: 248, 250, 252;
+  --ion-color-light-contrast: #0b1220;
+  --ion-color-light-contrast-rgb: 11, 18, 32;
+  --ion-color-light-shade: #dadcde;
+  --ion-color-light-tint: #f9fbfc;
+}
+
+// Felt green is for filled buttons. Where Ionic draws primary/danger as *text* on a dark
+// surface (toolbar buttons, back button, action sheets, alerts) use lighter shades for 4.5:1.
+ion-toolbar,
+ion-action-sheet,
+ion-alert {
+  --ion-color-primary: #4ade80;
+  --ion-color-primary-rgb: 74, 222, 128;
+  --ion-color-danger: #f87171;
+  --ion-color-danger-rgb: 248, 113, 113;
+}
+ion-action-sheet { --button-color: var(--mb-text); }
+
+:root.ios ion-modal,
+:root.md ion-modal {
+  --ion-background-color: var(--mb-bg);
+  --background: var(--mb-bg);
+}

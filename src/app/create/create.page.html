@@ -1,0 +1,57 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-buttons slot="start"><ion-back-button defaultHref="/" text="Back" /></ion-buttons>
+    <ion-title>New game</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <main class="wrap">
+    <h1 class="page-title">You’re the banker</h1>
+    <p class="lede">You’ll get a QR code for everyone to scan. Once they’re in, you set the starting cash and start the game.</p>
+
+    <ion-input
+      class="field"
+      fill="outline"
+      label="Your name"
+      labelPlacement="stacked"
+      placeholder="e.g. Alex"
+      maxlength="20"
+      autocomplete="nickname"
+      autocapitalize="words"
+      enterkeyhint="go"
+      helperText="Other players will see this name"
+      [value]="name()"
+      (ionInput)="name.set($event.detail.value ?? '')"
+      (keyup.enter)="create()"
+    />
+    @if (tried() && !valid()) {
+      <p class="field-error" role="alert"><ion-icon name="alert-circle" aria-hidden="true" />Enter your name to continue</p>
+    }
+
+    <div class="card toggle-card">
+      <ion-toggle [checked]="plays()" (ionChange)="plays.set($event.detail.checked)" justify="space-between">
+        <span class="toggle-label">
+          <strong>I’m playing too</strong>
+          <span>Turn this off if you’re only running the bank.</span>
+        </span>
+      </ion-toggle>
+    </div>
+
+    @if (error()) {
+      <p class="form-error" role="alert"><ion-icon name="alert-circle" aria-hidden="true" />{{ error() }}</p>
+    }
+  </main>
+</ion-content>
+
+<ion-footer class="ion-no-border">
+  <div class="footer-bar">
+    <ion-button expand="block" size="large" (click)="create()" [disabled]="busy()">
+      @if (busy()) {
+        <ion-spinner name="crescent" aria-label="Creating game" />
+      } @else {
+        Create game
+      }
+    </ion-button>
+  </div>
+</ion-footer>

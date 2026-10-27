@@ -1,0 +1,431 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button (click)="home()" aria-label="Back to home">
+        <ion-icon slot="icon-only" name="chevron-back" aria-hidden="true" />
+      </ion-button>
+    </ion-buttons>
+    <ion-title>
+      @if (bank.code(); as code) { <span class="title-code" [attr.aria-label]="'Game ' + spaced(code)">{{ code }}</span> }
+    </ion-title>
+    @if (bank.game()) {
+      <ion-buttons slot="end">
+        <ion-button (click)="menu()" aria-label="Game menu">
+          <ion-icon slot="icon-only" name="ellipsis-horizontal" aria-hidden="true" />
+        </ion-button>
+      </ion-buttons>
+    }
+  </ion-toolbar>
+  @if (view() === 'active' && bothTabs()) {
+    <ion-toolbar class="tabs-bar">
+      <ion-segment [value]="tab()" (ionChange)="tab.set($any($event.detail.value))">
+        <ion-segment-button value="wallet"><ion-label>My wallet</ion-label></ion-segment-button>
+        <ion-segment-button value="bank"><ion-label>Bank</ion-label></ion-segment-button>
+      </ion-segment>
+    </ion-toolbar>
+  }
+</ion-header>
+
+<ion-content>
+  <main class="wrap">
+    @switch (view()) {
+      @case ('loading') {
+        <div class="skeleton" style="height: 180px" role="status" aria-label="Loading game"></div>
+        <div class="skeleton" style="height: 76px; margin-top: 14px"></div>
+        <div class="skeleton" style="height: 220px; margin-top: 28px"></div>
+      }
+
+      @case ('missing') {
+        <div class="state">
+          <ion-icon name="search-outline" aria-hidden="true" />
+          <h1 class="page-title">Game not found</h1>
+          <p class="lede">{{ bank.error() || 'Check the code with your banker, or start a new game.' }}</p>
+          <ion-button expand="block" size="large" (click)="home(true)">Back to home</ion-button>
+        </div>
+      }
+
+      @case ('outsider') {
+        <div class="state">
+          <ion-icon name="lock-closed-outline" aria-hidden="true" />
+          <h1 class="page-title">You’re not in this game</h1>
+          @if (bank.game()?.status === 'lobby') {
+            <p class="lede">Add your name to take a seat at the table.</p>
+            <ion-button expand="block" size="large" [routerLink]="['/join', bank.code()]">Join this game</ion-button>
+          } @else {
+            <p class="lede">This game has already started, so only its players can see it. If you joined on another browser or phone, open it there.</p>
+            <ion-button expand="block" size="large" (click)="home(true)">Back to home</ion-button>
+          }
+        </div>
+      }
+
+      @case ('lobby') {
+        @if (bank.game(); as g) {
+          @if (bank.isBanker()) {
+            <section class="invite">
+              <h1 class="page-title">Invite players</h1>
+              <p class="lede">Players scan this with their phone camera, or type the code in the app.</p>
+              <div class="qr-frame">
+                @if (joinQr()) {
+                  <img [src]="joinQr()" [alt]="'QR code to join game ' + g.code" />
+                } @else {
+                  <div class="skeleton" style="width: 100%; height: 100%"></div>
+                }
+              </div>
+              <p class="code-big" [attr.aria-label]="'Game code ' + spaced(g.code)">{{ g.code }}</p>
+              <ion-button fill="clear" color="secondary" (click)="share()">
+                <ion-icon slot="start" name="share-outline" aria-hidden="true" />
+                Share invite link
+              </ion-button>
+            </section>
+          } @else if (bank.me(); as me) {
+            <section class="waiting">
+              <app-avatar [name]="me.name" [color]="me.color" size="lg" />
+              <h1 class="page-title">You’re in, {{ me.name }}!</h1>
+              <p class="lede waiting-line"><span class="live-dot" aria-hidden="true"></span>Waiting for {{ g.bankerName }} to start the game</p>
+              <div class="terms">
+                <div><span>Starting cash</span><strong class="num">{{ fmt(g.startingCash) }}</strong></div>
+                <div><span>Passing GO</span><strong class="num">{{ fmt(g.salary) }}</strong></div>
+                <div><span>Debt limit</span><strong class="num">{{ g.debtLimit ? fmt(g.debtLimit) : 'None' }}</strong></div>
+              </div>
+            </section>
+          }
+
+          <section class="section">
+            <h2 class="section-title">Players <span class="num">{{ bank.players().length }} / {{ maxPlayers }}</span></h2>
+            <ul class="list">
+              @for (p of bank.players(); track p.id) {
+                <li class="row">
+                  <app-avatar [name]="p.name" [color]="p.color" />
+                  <span class="row-main">
+                    <span class="row-title">
+                      {{ p.name }}
+                      @if (p.id === bank.uid()) { <span class="badge">You</span> }
+                      @if (p.id === g.bankerUid) { <span class="badge gold">Banker</span> }
+                    </span>
+                  </span>
+                  @if (bank.isBanker() && p.id !== bank.uid()) {
+                    <button type="button" class="icon-btn" (click)="remove(p)" [attr.aria-label]="'Remove ' + p.name">
+                      <ion-icon name="close-circle-outline" aria-hidden="true" />
+                    </button>
+                  }
+                </li>
+              } @empty {
+                <li class="empty"><span class="live-dot" aria-hidden="true"></span> Waiting for players to join…</li>
+              }
+            </ul>
+          </section>
+
+          @if (bank.isBanker()) {
+            <section class="section">
+              <h2 class="section-title">Money</h2>
+              <div class="card">
+                <p class="field-label" id="currency-label">Currency</p>
+                <ion-segment class="currency" [value]="g.currency" (ionChange)="setCurrency($event.detail.value)" aria-labelledby="currency-label">
+                  @for (c of currencies; track c.symbol) {
+                    <ion-segment-button [value]="c.symbol"><ion-label>{{ c.symbol }}</ion-label></ion-segment-button>
+                  }
+                </ion-segment>
+                <ion-input
+                  class="field"
+                  type="number"
+                  inputmode="numeric"
+                  fill="outline"
+                  label="Starting cash for each player"
+                  labelPlacement="stacked"
+                  min="1"
+                  max="1000000"
+                  [value]="g.startingCash"
+                  (ionInput)="typing('startingCash', $event.detail.value)"
+                  (ionChange)="setMoney('startingCash', $event.detail.value)"
+                >
+                  <span slot="start" class="prefix" aria-hidden="true">{{ g.currency }}</span>
+                </ion-input>
+                <ion-input
+                  class="field"
+                  type="number"
+                  inputmode="numeric"
+                  fill="outline"
+                  label="Salary for passing GO"
+                  labelPlacement="stacked"
+                  min="0"
+                  max="1000000"
+                  [value]="g.salary"
+                  (ionInput)="typing('salary', $event.detail.value)"
+                  (ionChange)="setMoney('salary', $event.detail.value)"
+                >
+                  <span slot="start" class="prefix" aria-hidden="true">{{ g.currency }}</span>
+                </ion-input>
+                <ion-input
+                  class="field"
+                  type="number"
+                  inputmode="numeric"
+                  fill="outline"
+                  label="Debt limit"
+                  labelPlacement="stacked"
+                  helperText="How far below zero a player can go. Paying past it makes them bankrupt. 0 = no debt."
+                  min="0"
+                  max="10000000"
+                  [value]="g.debtLimit ?? 0"
+                  (ionInput)="typing('debtLimit', $event.detail.value)"
+                  (ionChange)="setMoney('debtLimit', $event.detail.value)"
+                >
+                  <span slot="start" class="prefix" aria-hidden="true">{{ g.currency }}</span>
+                </ion-input>
+              </div>
+            </section>
+          }
+        }
+      }
+
+      @case ('active') {
+        @if (activeTab() === 'wallet') {
+          @if (bank.me(); as me) {
+            <section class="balance-card" [class.bankrupt]="me.bankrupt" [class.debt]="me.balance < 0 && !me.bankrupt" aria-label="Your balance">
+              <div class="bc-top">
+                <app-avatar [name]="me.name" [color]="me.color" size="sm" />
+                <span class="bc-name">{{ me.name }}</span>
+                @if (bank.isBanker()) { <span class="badge gold">Banker</span> }
+              </div>
+              <p class="bc-label">
+                {{ me.bankrupt ? 'Bankrupt' : me.balance < 0 ? 'In debt · limit ' + fmt(debtLimit()) : 'Cash' }}
+                @if (flash(); as f) {
+                  @for (k of [f.key]; track k) {
+                    <span class="bc-delta" [class.neg]="f.n < 0" aria-hidden="true">{{ signed(f.n) }}</span>
+                  }
+                }
+              </p>
+              @let shownText = fmt(shown());
+              <p class="bc-amount" [class.long]="shownText.length > 9" aria-hidden="true">{{ shownText }}</p>
+              <span class="sr-only" aria-live="polite">{{ fmt(me.balance) }}</span>
+            </section>
+
+            @if (me.bankrupt) {
+              <div class="notice danger">
+                <ion-icon name="trending-down-outline" aria-hidden="true" />
+                <p>You’re out of the game. You can keep watching the action below.</p>
+              </div>
+            } @else {
+              @let go = myGo();
+              <button type="button" class="go-tile" [class.pending]="!!go" (click)="go ? cancelGo(go) : passGo()"
+                [disabled]="goBusy() || goCooldown() || !bank.online()">
+                <span class="go-icon" aria-hidden="true">
+                  <ion-icon [name]="go ? 'hourglass-outline' : goCooldown() ? 'checkmark-circle' : 'arrow-redo'" />
+                </span>
+                <span class="go-text">
+                  @if (go) {
+                    <strong>Waiting for the banker</strong>
+                    <span>{{ fmt(go.amount) }} salary · tap to cancel</span>
+                  } @else {
+                    <strong>{{ goCooldown() ? 'Collected!' : 'Pass GO' }}</strong>
+                    <span>Collect {{ fmt(bank.game()?.salary ?? 0) }} salary</span>
+                  }
+                </span>
+              </button>
+
+              <div class="tiles">
+                <button type="button" class="tile" (click)="request()" [disabled]="!bank.online()">
+                  <ion-icon name="qr-code-outline" aria-hidden="true" />
+                  <span class="tile-title">Get paid</span>
+                  <span class="tile-sub">Show a QR</span>
+                </button>
+                <button type="button" class="tile" (click)="payScan()" [disabled]="!bank.online()">
+                  <ion-icon name="scan-outline" aria-hidden="true" />
+                  <span class="tile-title">Pay</span>
+                  <span class="tile-sub">Scan their QR</span>
+                </button>
+                <button type="button" class="tile" (click)="payBank()" [disabled]="!bank.online()">
+                  <ion-icon name="business-outline" aria-hidden="true" />
+                  <span class="tile-title">Pay bank</span>
+                  <span class="tile-sub">Buy, tax, fees</span>
+                </button>
+              </div>
+            }
+
+            <section class="section">
+              <h2 class="section-title">Players</h2>
+              <ul class="list">
+                @for (p of others(); track p.id) {
+                  <li>
+                    <button type="button" class="row" [class.faded]="p.bankrupt" (click)="sendTo(p)"
+                      [disabled]="p.bankrupt || me.bankrupt || !bank.online()"
+                      [attr.aria-label]="p.bankrupt ? p.name + ', bankrupt' : 'Pay ' + p.name + '. They have ' + fmt(p.balance)">
+                      <app-avatar [name]="p.name" [color]="p.color" />
+                      <span class="row-main">
+                        <span class="row-title">
+                          {{ p.name }}
+                          @if (p.id === bank.game()?.bankerUid) { <span class="badge gold">Banker</span> }
+                        </span>
+                        <span class="row-sub">{{ p.bankrupt ? 'Bankrupt' : me.bankrupt ? '' : 'Tap to pay' }}</span>
+                      </span>
+                      <span class="row-end" [class.neg]="p.balance < 0">{{ fmt(p.balance) }}</span>
+                      @if (!p.bankrupt && !me.bankrupt) { <ion-icon name="chevron-forward" class="row-chev" aria-hidden="true" /> }
+                    </button>
+                  </li>
+                } @empty {
+                  <li class="empty">No other players.</li>
+                }
+              </ul>
+            </section>
+
+            <ng-container [ngTemplateOutlet]="activity" [ngTemplateOutletContext]="{ $implicit: false }" />
+          }
+        } @else {
+          @if (bank.game(); as g) {
+            <section class="card bank-card" aria-label="Bank summary">
+              <div class="bank-head">
+                <span class="avatar bank" aria-hidden="true"><ion-icon name="business" /></span>
+                <span class="row-main">
+                  <span class="row-title">The Bank</span>
+                  <span class="row-sub">Run by {{ bank.isBanker() ? 'you' : g.bankerName }}</span>
+                </span>
+              </div>
+              <dl class="stats">
+                <div><dt>Cash in play</dt><dd class="num">{{ fmt(inPlay()) }}</dd></div>
+                <div><dt>Still in</dt><dd class="num">{{ solvent().length }} of {{ bank.players().length }}</dd></div>
+                <div><dt>GO salary</dt><dd class="num">{{ fmt(g.salary) }}</dd></div>
+              </dl>
+            </section>
+
+            <section class="section">
+              <h2 class="section-title">Players <span>Tap to manage</span></h2>
+              <ul class="list">
+                @for (p of bank.ranked(); track p.id) {
+                  <li>
+                    <button type="button" class="row" [class.faded]="p.bankrupt" (click)="manage(p)" [disabled]="p.bankrupt || !bank.online()"
+                      [attr.aria-label]="p.bankrupt ? p.name + ', bankrupt' : 'Manage ' + p.name + ', ' + fmt(p.balance)">
+                      <app-avatar [name]="p.name" [color]="p.color" />
+                      <span class="row-main">
+                        <span class="row-title">
+                          {{ p.name }}
+                          @if (p.id === bank.uid()) { <span class="badge">You</span> }
+                        </span>
+                        @if (p.bankrupt) { <span class="row-sub">Bankrupt</span> }
+                      </span>
+                      <span class="row-end" [class.neg]="p.balance < 0">{{ fmt(p.balance) }}</span>
+                      @if (!p.bankrupt) { <ion-icon name="chevron-forward" class="row-chev" aria-hidden="true" /> }
+                    </button>
+                  </li>
+                }
+              </ul>
+            </section>
+
+            <ng-container [ngTemplateOutlet]="activity" [ngTemplateOutletContext]="{ $implicit: true }" />
+
+            <ion-button class="end-btn danger-outline" expand="block" fill="outline" (click)="endGame()">End game</ion-button>
+          }
+        }
+      }
+
+      @case ('ended') {
+        @if (!bank.game()?.startedAt) {
+          <div class="state">
+            <ion-icon name="close-circle-outline" aria-hidden="true" />
+            <h1 class="page-title">Game cancelled</h1>
+            <p class="lede">{{ bank.game()?.bankerName }} cancelled this game before it started.</p>
+          </div>
+        } @else {
+        <section class="results">
+          <div class="trophy" aria-hidden="true"><ion-icon name="trophy" /></div>
+          <h1 class="page-title">{{ winner() ? winner()!.name + ' wins!' : 'Game over' }}</h1>
+          @if (lastStanding()) {
+            <p class="lede">Last player standing: everyone else went bankrupt.</p>
+          } @else {
+            <p class="lede">Final standings by cash. Playing by net worth? Add the property values from the board.</p>
+          }
+          <ol class="list ranking">
+            @for (p of bank.ranked(); track p.id; let i = $index) {
+              <li class="row" [class.first]="i === 0 && !p.bankrupt">
+                <span class="rank num" aria-label="Place {{ i + 1 }}">{{ i + 1 }}</span>
+                <app-avatar [name]="p.name" [color]="p.color" />
+                <span class="row-main">
+                  <span class="row-title">{{ p.name }} @if (p.id === bank.uid()) { <span class="badge">You</span> }</span>
+                  @if (p.bankrupt) { <span class="row-sub">Bankrupt</span> }
+                </span>
+                <span class="row-end" [class.neg]="p.balance < 0">{{ fmt(p.balance) }}</span>
+              </li>
+            } @empty {
+              <li class="empty">Nobody played this game.</li>
+            }
+          </ol>
+        </section>
+        }
+      }
+    }
+  </main>
+</ion-content>
+
+@if (view() === 'lobby' && bank.game(); as g) {
+  <ion-footer class="ion-no-border">
+    <div class="footer-bar">
+      @if (bank.isBanker()) {
+        <ion-button expand="block" size="large" (click)="start()"
+          [disabled]="bank.players().length < minPlayers || !!moneyError() || busy() || !bank.online()">
+          @if (busy()) {
+            <ion-spinner name="crescent" aria-label="Starting game" />
+          } @else {
+            Start game · {{ moneyError() ? '…' : fmt(money().startingCash) + ' each' }}
+          }
+        </ion-button>
+        @let need = minPlayers - bank.players().length;
+        @if (moneyError()) {
+          <p class="footer-hint error-hint" role="alert">{{ moneyError() }}</p>
+        } @else if (need > 0) {
+          <p class="footer-hint">
+            @if (bank.me()) {
+              Waiting for {{ need }} more {{ need === 1 ? 'player' : 'players' }} to join you
+            } @else {
+              Waiting for {{ need }} {{ need === 1 ? 'more player' : 'players' }} to join
+            }
+          </p>
+        }
+      } @else {
+        <ion-button expand="block" fill="clear" class="danger-text" (click)="leave()">Leave game</ion-button>
+      }
+    </div>
+  </ion-footer>
+}
+
+@if (view() === 'ended') {
+  <ion-footer class="ion-no-border">
+    <div class="footer-bar">
+      <ion-button expand="block" size="large" (click)="home(true)">Back to home</ion-button>
+    </div>
+  </ion-footer>
+}
+
+<ng-template #activity let-bankMode>
+  <section class="section">
+    <h2 class="section-title">Activity @if (bankMode) { <span>Tap a payment to reverse it</span> }</h2>
+    @if (bank.txns().length) {
+      <ul class="list">
+        @for (t of bank.txns(); track t.id) {
+          <li>
+            @if (bankMode && canUndo(t)) {
+              <button type="button" class="row" (click)="undo(t)" [attr.aria-label]="text(t) + ', ' + fmt(t.amount) + '. Tap to reverse.'">
+                <ng-container [ngTemplateOutlet]="txnRow" [ngTemplateOutletContext]="{ $implicit: t }" />
+              </button>
+            } @else {
+              <div class="row" [class.txn-undone]="t.undone">
+                <ng-container [ngTemplateOutlet]="txnRow" [ngTemplateOutletContext]="{ $implicit: t }" />
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    } @else {
+      <p class="empty card">No transactions yet.</p>
+    }
+  </section>
+</ng-template>
+
+<ng-template #txnRow let-t>
+  @let d = delta(t);
+  <span class="txn-icon" aria-hidden="true"><ion-icon [name]="icon(t)" /></span>
+  <span class="row-main">
+    <span class="row-title">{{ text(t) }}</span>
+    <span class="row-sub">{{ t.at | date: 'h:mm a' }}@if (t.undone) { · reversed }</span>
+  </span>
+  @if (t.kind !== 'start') {
+    <span class="row-end" [class.pos]="d > 0" [class.neg]="d < 0">{{ d ? signed(d) : fmt(t.amount) }}</span>
+  }
+</ng-template>

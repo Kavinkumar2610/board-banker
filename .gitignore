@@ -68,3 +68,14 @@ testem.log
 # System files
 .DS_Store
 Thumbs.db
+
+# Firebase
+.firebase/
+*-debug.log
+
+# E2E output
+/e2e/screenshots
+/e2e/.profiles
+
+# Real Firebase web config (template: src/app/firebase.config.example.ts)
+/src/app/firebase.config.ts

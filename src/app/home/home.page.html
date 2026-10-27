@@ -1,20 +1,50 @@
-<ion-header [translucent]="true">
-  <ion-toolbar>
-    <ion-title>
-      Blank
-    </ion-title>
-  </ion-toolbar>
-</ion-header>
-
 <ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">Blank</ion-title>
-    </ion-toolbar>
-  </ion-header>
+  <main class="wrap home">
+    <section class="hero">
+      <img class="hero-logo" src="icons/logo.svg" alt="" width="96" height="96" />
+      <h1 class="brand">Board Banker</h1>
+      <p class="lede">Leave the paper money in the box. Pay rent, collect your GO salary and trade with a quick QR scan.</p>
+    </section>
 
-  <div id="container">
-    <strong>Ready to create an app?</strong>
-    <p>Start with Ionic <a target="_blank" rel="noopener noreferrer" href="https://ionicframework.com/docs/components">UI Components</a></p>
-  </div>
+    @if (setupError()) {
+      <div class="notice danger" role="alert">
+        <ion-icon name="alert-circle" aria-hidden="true" />
+        <p>{{ setupError() }}</p>
+      </div>
+    }
+
+    @if (resume(); as r) {
+      <button type="button" class="resume" (click)="open(r.code)">
+        <span class="resume-dot" aria-hidden="true"></span>
+        <span class="row-main">
+          <span class="row-title">{{ r.status === 'lobby' ? 'Your game is waiting to start' : 'Your game is in progress' }}</span>
+          <span class="row-sub">Code {{ r.code }} · tap to go back</span>
+        </span>
+        <ion-icon name="chevron-forward" class="row-chev" aria-hidden="true" />
+      </button>
+    }
+
+    <section class="actions" aria-label="Get started">
+      <ion-button expand="block" size="large" (click)="scan()">
+        <ion-icon slot="start" name="scan-outline" aria-hidden="true" />
+        Scan to join a game
+      </ion-button>
+      <ion-button expand="block" fill="clear" color="light" routerLink="/join">Enter a game code</ion-button>
+
+      <div class="or" aria-hidden="true">or</div>
+
+      <ion-button expand="block" size="large" fill="outline" color="secondary" routerLink="/create">
+        <ion-icon slot="start" name="business-outline" aria-hidden="true" />
+        Be the banker
+      </ion-button>
+      <p class="fine">The banker starts the game. Everyone else joins on their own phone. 2 to 8 players.</p>
+
+      @if (canInstall()) {
+        <ion-button class="install" fill="clear" size="small" color="medium" (click)="install()">
+          <ion-icon slot="start" name="download-outline" aria-hidden="true" />
+          Install the app
+        </ion-button>
+      }
+    </section>
+  </main>
 </ion-content>

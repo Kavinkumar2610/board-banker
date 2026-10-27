@@ -1,0 +1,161 @@
+rules_version = '2';
+
+// Money rules, enforced server-side:
+// - A player can only lower their own balance (paying someone or the bank), down to minus the banker's
+//   debt limit; a payment past it must make them bankrupt. Going bankrupt hands over only cash they have.
+// - GO salary is paid by the banker, against the player's open GO request for exactly the salary.
+// - A player can only raise someone else's balance by the exact amount they paid in the same write.
+// - Only the banker pays out of the bank, corrects balances, reverses transactions or ends the game.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function money(n) { return n is int && n >= 0 && n <= 100000000; }
+    function balance(n) { return n is int && n >= -100000000 && n <= 100000000; }
+    function currency(c) { return c in ['$', 'RM', '£', '€']; }
+    // TTL deletes records at expireAt. A game keeps itself 1–8 days (the app uses 7); children copy the game's date.
+    function keepUntil(t) { return t is timestamp && t > request.time + duration.value(1, 'd') && t < request.time + duration.value(8, 'd'); }
+
+    match /games/{code} {
+      function gamePath() { return /databases/$(database)/documents/games/$(code); }
+      function game() { return get(gamePath()).data; }
+      function playerPath(uid) { return /databases/$(database)/documents/games/$(code)/players/$(uid); }
+      function isBanker() { return signedIn() && game().bankerUid == request.auth.uid; }
+      function isMember() { return isBanker() || exists(playerPath(request.auth.uid)); }
+
+      function expired() { return resource.data.expireAt < request.time; }
+
+      // The 6-character code is the invite: open a game by its code, never by browsing.
+      allow get: if signedIn();
+      // ponytail: stand-in for Firestore TTL (needs Blaze): any player's app may sweep games past their date.
+      allow list, delete: if signedIn() && expired();
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['code', 'bankerUid', 'bankerName', 'bankerPlays', 'status', 'currency', 'startingCash', 'salary', 'debtLimit', 'createdAt', 'expireAt'])
+        && money(request.resource.data.get('debtLimit', 0))
+        && keepUntil(request.resource.data.expireAt)
+        && request.resource.data.code == code
+        && request.resource.data.bankerUid == request.auth.uid
+        && request.resource.data.bankerName is string
+        && request.resource.data.bankerName.size() > 0 && request.resource.data.bankerName.size() <= 20
+        && request.resource.data.bankerPlays is bool
+        && request.resource.data.status == 'lobby'
+        && currency(request.resource.data.currency)
+        && money(request.resource.data.startingCash) && money(request.resource.data.salary)
+        && request.resource.data.createdAt == request.time;
+
+      allow update: if signedIn() && resource.data.bankerUid == request.auth.uid
+        && (
+          // lobby: settings, start, or cancel
+          (resource.data.status == 'lobby' && request.resource.data.status in ['lobby', 'active', 'ended']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'currency', 'startingCash', 'salary', 'debtLimit', 'startedAt', 'endedAt'])
+            && currency(request.resource.data.currency)
+            && money(request.resource.data.get('debtLimit', 0))
+            && money(request.resource.data.startingCash) && money(request.resource.data.salary))
+          // in play: only ending it
+          || (resource.data.status == 'active' && request.resource.data.status == 'ended'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'endedAt']))
+        );
+
+      match /players/{uid} {
+        function d() { return request.resource.data; }
+        function o() { return resource.data; }
+        function changed() { return d().diff(o()).affectedKeys(); }
+
+        function bankerEdit() { return isBanker() && game().status in ['lobby', 'active']; }
+
+        function limit() { return game().get('debtLimit', 0); }
+
+        function selfEdit() {
+          return uid == request.auth.uid && game().status == 'active' && o().bankrupt == false && (
+            (d().bankrupt == false && d().balance < o().balance && d().balance >= -limit())   // paying, maybe into debt
+            || (d().bankrupt == true && d().balance < o().balance && d().balance < -limit())  // paying past the limit: bankrupt
+            || (d().bankrupt == true && d().balance == (o().balance > 0 ? 0 : o().balance))   // declaring bankruptcy
+          );
+        }
+
+        function credit() {
+          let payer = playerPath(request.auth.uid);
+          return uid != request.auth.uid && game().status == 'active'
+            && o().bankrupt == false && d().bankrupt == false
+            && changed().hasOnly(['balance'])
+            && d().balance > o().balance
+            && get(payer).data.balance - getAfter(payer).data.balance == d().balance - o().balance;
+        }
+
+        allow read: if signedIn();
+
+        allow create: if signedIn() && uid == request.auth.uid
+          && getAfter(gamePath()).data.status == 'lobby'
+          && d().keys().hasOnly(['name', 'color', 'balance', 'bankrupt', 'joinedAt', 'expireAt'])
+          && d().expireAt == getAfter(gamePath()).data.expireAt
+          && d().name is string && d().name.size() > 0 && d().name.size() <= 20
+          && d().color is int && d().color >= 0 && d().color < 8
+          && d().balance == 0 && d().bankrupt == false
+          && d().joinedAt == request.time;
+
+        allow delete: if signedIn() && game().status == 'lobby' && (uid == request.auth.uid || isBanker());
+        allow delete: if signedIn() && expired();
+
+        allow update: if signedIn()
+          && changed().hasOnly(['balance', 'bankrupt', 'bankruptAt'])
+          && balance(d().balance) && d().bankrupt is bool
+          && (bankerEdit() || selfEdit() || credit());
+      }
+
+      match /requests/{id} {
+        allow read: if signedIn();
+        allow delete: if signedIn() && expired();
+
+        allow create: if signedIn() && game().status == 'active'
+          && exists(playerPath(request.auth.uid))
+          && request.resource.data.keys().hasOnly(['kind', 'to', 'amount', 'status', 'createdAt', 'expireAt'])
+          && request.resource.data.expireAt == game().expireAt
+          && request.resource.data.to == request.auth.uid
+          && request.resource.data.amount is int
+          && request.resource.data.amount > 0 && request.resource.data.amount <= 100000000
+          // 'go' asks the banker for exactly the GO salary
+          && request.resource.data.get('kind', 'pay') in ['pay', 'go']
+          && (request.resource.data.get('kind', 'pay') == 'pay' || request.resource.data.amount == game().salary)
+          && request.resource.data.status == 'open'
+          && request.resource.data.createdAt == request.time;
+
+        allow update: if signedIn() && resource.data.status == 'open' && (
+          // the requester cancels
+          (resource.data.to == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+            && request.resource.data.status == 'cancelled')
+          // the banker declines a GO request
+          || (isBanker() && resource.data.get('kind', 'pay') == 'go'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+            && request.resource.data.status == 'declined')
+          // the payer settles (only the banker settles GO), valid only if the money lands in the same write
+          || ((resource.data.get('kind', 'pay') == 'pay' || isBanker())
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'paidBy', 'paidAt'])
+            && request.resource.data.status == 'paid'
+            && request.resource.data.paidBy == request.auth.uid
+            && request.resource.data.paidAt == request.time
+            && getAfter(playerPath(resource.data.to)).data.balance
+               == get(playerPath(resource.data.to)).data.balance + resource.data.amount)
+        );
+      }
+
+      // ponytail: the log is informational; balances above are the source of truth.
+      match /txns/{id} {
+        allow read: if signedIn();
+        allow delete: if signedIn() && expired();
+
+        allow create: if signedIn() && isMember() && game().status in ['lobby', 'active']
+          && request.resource.data.keys().hasOnly(['kind', 'from', 'to', 'amount', 'by', 'at', 'undoOf', 'bust', 'expireAt'])
+          && request.resource.data.expireAt == game().expireAt
+          && request.resource.data.by == request.auth.uid
+          && request.resource.data.kind in ['start', 'pay', 'salary', 'bank-in', 'bank-out', 'adjust', 'undo', 'bankrupt']
+          && request.resource.data.amount is int
+          && request.resource.data.at == request.time;
+
+        allow update: if isBanker()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['undone'])
+          && request.resource.data.undone == true;
+      }
+    }
+  }
+}

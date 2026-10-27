@@ -1,0 +1,93 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-buttons slot="start"><ion-back-button defaultHref="/" text="Back" /></ion-buttons>
+    <ion-title>Join game</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <main class="wrap">
+    <h1 class="page-title">Join a game</h1>
+    <p class="lede">Enter the 6-character code on the banker’s screen, or scan their QR code.</p>
+
+    <ion-input
+      class="field code-input"
+      fill="outline"
+      label="Game code"
+      labelPlacement="stacked"
+      placeholder="K7P2QX"
+      maxlength="6"
+      autocapitalize="characters"
+      autocomplete="off"
+      spellcheck="false"
+      enterkeyhint="next"
+      [value]="entered()"
+      (ionInput)="onCode($event.detail.value)"
+    />
+    <ion-button class="scan-link" fill="clear" color="secondary" (click)="scan()">
+      <ion-icon slot="start" name="scan-outline" aria-hidden="true" />
+      Scan QR code instead
+    </ion-button>
+
+    @let l = lookup();
+    @if (l.state === 'loading') {
+      <div class="skeleton found-skeleton" role="status" aria-label="Looking up game"></div>
+    } @else if (l.state === 'error') {
+      <div class="notice danger" role="alert">
+        <ion-icon name="alert-circle" aria-hidden="true" />
+        <p>{{ l.error }}</p>
+      </div>
+    } @else if (l.state === 'found') {
+      <div class="card found" role="status">
+        <div class="found-head">
+          <span class="avatar bank" aria-hidden="true"><ion-icon name="business" /></span>
+          <span class="row-main">
+            <span class="row-title">{{ l.game.bankerName }}’s game</span>
+            <span class="row-sub">{{ l.players.length }} of {{ max }} players joined</span>
+          </span>
+        </div>
+        @if (l.players.length) {
+          <div class="found-players" aria-label="Players already in">
+            @for (p of l.players; track p.id) {
+              <span class="chip-player"><app-avatar [name]="p.name" [color]="p.color" size="sm" />{{ p.name }}</span>
+            }
+          </div>
+        }
+      </div>
+
+      <ion-input
+        class="field name-input"
+        fill="outline"
+        label="Your name"
+        labelPlacement="stacked"
+        placeholder="e.g. Alex"
+        maxlength="20"
+        autocomplete="nickname"
+        autocapitalize="words"
+        enterkeyhint="go"
+        [value]="name()"
+        (ionInput)="name.set($event.detail.value ?? '')"
+        (keyup.enter)="join()"
+      />
+      @if (tried() && nameError()) {
+        <p class="field-error" role="alert"><ion-icon name="alert-circle" aria-hidden="true" />{{ nameError() }}</p>
+      }
+    }
+
+    @if (error()) {
+      <p class="form-error" role="alert"><ion-icon name="alert-circle" aria-hidden="true" />{{ error() }}</p>
+    }
+  </main>
+</ion-content>
+
+<ion-footer class="ion-no-border">
+  <div class="footer-bar">
+    <ion-button expand="block" size="large" (click)="join()" [disabled]="lookup().state !== 'found' || busy()">
+      @if (busy()) {
+        <ion-spinner name="crescent" aria-label="Joining" />
+      } @else {
+        Join game
+      }
+    </ion-button>
+  </div>
+</ion-footer>

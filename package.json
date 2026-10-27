@@ -1,15 +1,18 @@
 {
-  "name": "monopoly-bank",
+  "name": "board-banker",
   "version": "0.0.1",
-  "author": "Ionic Framework",
-  "homepage": "https://ionicframework.com/",
+  "homepage": "https://board-banker-26.web.app",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "lint": "ng lint"
+    "lint": "ng lint",
+    "dev": "firebase emulators:exec --only auth,firestore \"ng serve\"",
+    "test:rules": "firebase emulators:exec --only auth,firestore \"node scripts/rules-test.mjs\"",
+    "deploy": "ng build && firebase deploy --only hosting,firestore",
+    "test:e2e": "node e2e/e2e.mjs"
   },
   "private": true,
   "dependencies": {
@@ -19,13 +22,17 @@
     "@angular/forms": "22.2.3",
     "@angular/platform-browser": "22.2.3",
     "@angular/router": "22.2.3",
+    "@angular/service-worker": "22.2.3",
     "@capacitor/app": "8.1.2",
     "@capacitor/core": "8.5.3",
     "@capacitor/haptics": "8.0.2",
     "@capacitor/keyboard": "8.0.6",
     "@capacitor/status-bar": "8.0.4",
     "@ionic/angular": "^9.0.0",
+    "firebase": "^13.1.0",
     "ionicons": "^8.1.0",
+    "qr-scanner": "^1.4.2",
+    "qrcode": "^1.5.4",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
@@ -36,12 +43,14 @@
     "@angular/language-service": "22.2.3",
     "@capacitor/cli": "8.5.3",
     "@ionic/angular-toolkit": "^13.0.0",
+    "@types/qrcode": "^1.5.6",
     "angular-eslint": "22.6.0",
     "eslint": "^10.10.0",
     "jsdom": "^30.1.1",
+    "playwright-core": "^1.56.1",
     "typescript": "~6.0.0",
     "typescript-eslint": "^8.61.0",
     "vitest": "~5.0.5"
   },
-  "description": "An Ionic project"
+  "description": "Digital banker for property-trading board games: QR payments between players, backed by Firebase"
 }
