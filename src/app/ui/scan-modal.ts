@@ -41,7 +41,7 @@ import { buzz } from '../money';
   `,
   styles: `
     .dark-bar { --background: #000; --color: #fff; }
-    .dark-footer { background: #000; }
+    .dark-footer, .dark-footer .footer-bar { background: #000; }
     .scan { --background: #000; }
     video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     .viewfinder {

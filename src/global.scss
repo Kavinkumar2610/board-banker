@@ -86,8 +86,10 @@ ion-toast { --border-radius: 14px; font-weight: 600; }
   padding: 8px 16px 32px;
 }
 
-ion-footer { background: var(--mb-bg); }
+// The background sits on the bar, not ion-footer: Ionic's page transition slides ion-footer's children but
+// leaves ion-footer itself in place, so a background there would cover the bottom of the other page mid-swipe.
 .footer-bar {
+  background: var(--mb-bg);
   max-width: 560px;
   margin: 0 auto;
   padding: 8px 16px calc(10px + var(--ion-safe-area-bottom, 0px));

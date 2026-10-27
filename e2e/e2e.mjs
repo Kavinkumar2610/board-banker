@@ -41,6 +41,8 @@ async function phone(name, { camera, browser, offline } = {}) {
   }
   if (offline) await ctx.setOffline(true);
   const page = ctx.pages()[0] ?? (await ctx.newPage());
+  // An iPhone's status bar and home indicator, so screenshots show the real safe areas.
+  await (await ctx.newCDPSession(page)).send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 59, bottom: 34 } });
   page.on('pageerror', e => errors.push(`[${scenario}/${name}] ${e.message}`));
   page.on('console', m => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && errors.push(`[${scenario}/${name}] ${m.text()}`));
   page.setDefaultTimeout(15000);
