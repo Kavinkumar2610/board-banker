@@ -1,6 +1,6 @@
 {
   "name": "board-banker",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "homepage": "https://board-banker-26.web.app",
   "scripts": {
     "ng": "ng",
