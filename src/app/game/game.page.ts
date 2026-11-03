@@ -3,7 +3,7 @@ import { Component, computed, effect, inject, input, signal, untracked } from '@
 import { Router, RouterLink } from '@angular/router';
 import {
   ActionSheetButton, ActionSheetController, AlertController, IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonIcon,
-  IonInput, IonLabel, IonSegment, IonSegmentButton, IonSpinner, IonTitle, IonToolbar, ModalController, NavController,
+  IonInput, IonLabel, IonSegment, IonSegmentButton, IonSpinner, IonTitle, IonToggle, IonToolbar, ModalController, NavController,
   ToastController, ViewDidEnter, ViewWillLeave,
 } from '@ionic/angular';
 import { addIcons } from 'ionicons';
@@ -31,7 +31,7 @@ type MoneyField = 'startingCash' | 'salary' | 'debtLimit';
   styleUrls: ['game.page.scss'],
   imports: [
     IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonIcon, IonContent, IonFooter, IonSegment, IonSegmentButton, IonLabel,
-    IonSpinner, IonInput, DatePipe, NgTemplateOutlet, RouterLink, Avatar,
+    IonSpinner, IonInput, IonToggle, DatePipe, NgTemplateOutlet, RouterLink, Avatar,
   ],
 })
 export class GamePage implements ViewDidEnter, ViewWillLeave {
@@ -103,6 +103,11 @@ export class GamePage implements ViewDidEnter, ViewWillLeave {
   /** My GO request while it waits for the banker. */
   protected readonly myGo = computed(() => this.bank.goRequests().find(r => r.to === this.bank.uid()) ?? null);
   protected readonly busy = signal(false);
+  /** Last roll of the digital dice. Rolls stay on this phone: the player shows the table, like real dice. */
+  protected readonly roll = signal<{ a: number; b: number; key: number } | null>(null);
+  /** Which spots of a die's 3×3 grid have a pip, by face value. */
+  protected readonly pips = [[], [4], [2, 6], [2, 4, 6], [0, 2, 6, 8], [0, 2, 4, 6, 8], [0, 2, 3, 5, 6, 8]];
+  protected readonly spots = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 
   /** Balance shown on the card, counted up/down towards the real one. */
   protected readonly shown = signal(0);
@@ -388,6 +393,14 @@ export class GamePage implements ViewDidEnter, ViewWillLeave {
     }
   }
 
+  protected async setDice(on: boolean) {
+    try {
+      await this.bank.setDice(on);
+    } catch (e) {
+      await this.toast(errorText(e), 'danger');
+    }
+  }
+
   protected async remove(p: Player) {
     if (!(await this.confirm(`Remove ${p.name}?`, 'They can join again with the code.', 'Remove', true))) return;
     try {
@@ -457,6 +470,12 @@ export class GamePage implements ViewDidEnter, ViewWillLeave {
     } finally {
       this.goBusy.set(false);
     }
+  }
+
+  protected rollDice() {
+    const die = () => 1 + Math.floor(Math.random() * 6);
+    this.roll.set({ a: die(), b: die(), key: Date.now() });
+    buzz(20);
   }
 
   protected async cancelGo(r: GoRequest) {

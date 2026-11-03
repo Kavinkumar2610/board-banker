@@ -208,6 +208,10 @@ export class GameService {
     return updateDoc(this.ref(), { startingCash, salary, currency, debtLimit });
   }
 
+  setDice(dice: boolean) {
+    return updateDoc(this.ref(), { dice });
+  }
+
   leave(playerId = this.uid()!) {
     return deleteDoc(this.ref('players', playerId));
   }

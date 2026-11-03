@@ -206,9 +206,21 @@ async function main() {
     await see(ben, 'Start game · $2,000 each');
     await ben.page.locator('ion-segment.currency').scrollIntoViewIfNeeded();
     await shot(ben, 'lobby-money', 'Lobby: banker types starting cash, GO salary and debt limit');
+    const dice = ben.page.locator('app-game ion-toggle');
+    await dice.scrollIntoViewIfNeeded();
+    await dice.click();
+    await ben.page.locator('app-game ion-toggle.toggle-checked').waitFor();
+    await shot(ben, 'lobby-dice', 'Lobby: banker turns on digital dice (off by default)');
     await btn(ben, 'Start game · $2,000 each').click();
     await balanceIs(ben, '$2,000');
     await shot(ben, 'wallet-banker', 'Banker who plays: wallet tab plus bank tab');
+  });
+
+  await step('Bob rolls the digital dice', async () => {
+    await bob.page.getByRole('button', { name: /^Roll dice/ }).click();
+    await see(bob, 'Rolled ');
+    await bob.page.locator('.dice-tile').scrollIntoViewIfNeeded();
+    await shot(bob, 'dice', 'Digital dice: two dice and the total, rolled on the player’s phone');
   });
 
   await step('Bob passes GO; the banker approves in a pop-up (+$200)', async () => {
@@ -399,6 +411,7 @@ async function rm() {
 
   await step('GO pays RM2,000 once the banker approves', async () => {
     await balanceIs(siti, 'RM15,000');
+    if (await siti.page.locator('.dice-tile').count()) throw new Error('dice shown though the banker left them off');
     await btn(siti, 'Pass GO Collect RM2,000 salary').click();
     await alertBtn(siti, 'Ask banker').click();
     await see(kim, 'Siti passed GO');

@@ -47,7 +47,8 @@ service cloud.firestore {
         && (
           // lobby: settings, start, or cancel
           (resource.data.status == 'lobby' && request.resource.data.status in ['lobby', 'active', 'ended']
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'currency', 'startingCash', 'salary', 'debtLimit', 'startedAt', 'endedAt'])
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'currency', 'startingCash', 'salary', 'debtLimit', 'dice', 'startedAt', 'endedAt'])
+            && request.resource.data.get('dice', false) is bool
             && currency(request.resource.data.currency)
             && money(request.resource.data.get('debtLimit', 0))
             && money(request.resource.data.startingCash) && money(request.resource.data.salary))

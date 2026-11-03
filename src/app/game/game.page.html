@@ -174,6 +174,18 @@
                 </ion-input>
               </div>
             </section>
+
+            <section class="section">
+              <h2 class="section-title">Dice</h2>
+              <div class="card toggle-card">
+                <ion-toggle [checked]="!!g.dice" (ionChange)="setDice($event.detail.checked)" justify="space-between">
+                  <span class="toggle-label">
+                    <strong>Digital dice</strong>
+                    <span>Each player gets a Roll dice button. Leave this off to play with real dice.</span>
+                  </span>
+                </ion-toggle>
+              </div>
+            </section>
           }
         }
       }
@@ -240,6 +252,29 @@
                   <span class="tile-sub">Buy, tax, fees</span>
                 </button>
               </div>
+
+              @if (bank.game()?.dice) {
+                @let r = roll();
+                <button type="button" class="dice-tile" (click)="rollDice()">
+                  @for (k of [r?.key]; track k) {
+                    <span class="dice" [class.rolled]="!!r" aria-hidden="true">
+                      @for (n of r ? [r.a, r.b] : [5, 2]; track $index) {
+                        <span class="die">@for (i of spots; track i) { <i [class.on]="pips[n].includes(i)"></i> }</span>
+                      }
+                    </span>
+                  }
+                  <span class="dice-text">
+                    @if (r) {
+                      <strong>Rolled {{ r.a + r.b }} @if (r.a === r.b) { <span class="badge gold">Doubles</span> }</strong>
+                      <span>Tap to roll again</span>
+                    } @else {
+                      <strong>Roll dice</strong>
+                      <span>Tap to roll two dice</span>
+                    }
+                  </span>
+                </button>
+                <span class="sr-only" aria-live="polite">{{ r ? 'Rolled ' + r.a + ' and ' + r.b + ', ' + (r.a + r.b) + (r.a === r.b ? ', doubles' : '') : '' }}</span>
+              }
             }
 
             <section class="section">

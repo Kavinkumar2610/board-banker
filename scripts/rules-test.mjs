@@ -81,6 +81,12 @@ test('nobody can hijack the game or join with free money', async () => {
   await denied(setDoc(g(mallory.db, 'players', alice.uid), player('Fake Alice')));
 });
 
+test('only the banker turns on digital dice', async () => {
+  await denied(updateDoc(g(alice.db), { dice: true }));
+  await denied(updateDoc(g(banker.db), { dice: 'yes' }));
+  await updateDoc(g(banker.db), { dice: true });
+});
+
 test('only the banker starts the game', async () => {
   const b = writeBatch(banker.db);
   b.update(g(banker.db), { status: 'active', startedAt: serverTimestamp() });

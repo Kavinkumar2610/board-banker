@@ -28,6 +28,8 @@ export interface Game {
   salary: number;
   /** How far below zero a player may go; paying past it makes them bankrupt. 0 = no debt. */
   debtLimit?: number;
+  /** The banker turned on digital dice, so each player gets a Roll dice button. */
+  dice?: boolean;
   /** Set when the banker starts the game; an ended game without it was cancelled in the lobby. */
   startedAt?: unknown;
   /** Copied onto every record of the game, so TTL removes the whole game together. */
