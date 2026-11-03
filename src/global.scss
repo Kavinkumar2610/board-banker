@@ -222,7 +222,7 @@ button.row:disabled { cursor: default; }
 
 .balance-card {
   position: relative; overflow: hidden;
-  padding: 18px 20px 22px;
+  padding: 14px 18px 16px;
   border-radius: var(--mb-radius-lg);
   color: #fff;
   background:
@@ -231,9 +231,9 @@ button.row:disabled { cursor: default; }
   box-shadow: var(--mb-shadow);
 }
 .balance-card::after {
-  content: ''; position: absolute; right: -60px; bottom: -80px;
-  width: 220px; height: 220px; border-radius: 50%;
-  border: 26px solid rgba(255, 255, 255, 0.05);
+  content: ''; position: absolute; right: -50px; bottom: -70px;
+  width: 170px; height: 170px; border-radius: 50%;
+  border: 22px solid rgba(255, 255, 255, 0.05);
   pointer-events: none;
 }
 .balance-card.bankrupt { background: linear-gradient(150deg, #3a2430, #24161e); }
@@ -241,17 +241,18 @@ button.row:disabled { cursor: default; }
 .bc-top { display: flex; align-items: center; gap: 10px; }
 .bc-name { font-weight: 700; font-size: 17px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .bc-label {
-  display: flex; align-items: center; gap: 10px; min-height: 30px;
-  margin: 14px 0 0;
+  display: flex; align-items: center; gap: 10px; min-height: 28px;
+  margin: 6px 0 0;
   font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
   color: #ecfdf3;
 }
 .bc-amount {
   margin: 0;
-  font-size: clamp(44px, 14vw, 60px); line-height: 1.08; font-weight: 800; letter-spacing: -0.02em;
+  font-size: clamp(36px, 11vw, 46px); line-height: 1.1; font-weight: 800; letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
-.bc-amount.long, .pad-amount.long { font-size: clamp(34px, 10vw, 48px); }
+.bc-amount.long { font-size: clamp(30px, 8.5vw, 38px); }
+.pad-amount.long { font-size: clamp(34px, 10vw, 48px); }
 .bc-delta {
   padding: 4px 10px; border-radius: 999px;
   background: rgba(0, 0, 0, 0.3); color: #bbf7d0;

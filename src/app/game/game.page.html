@@ -195,7 +195,6 @@
           @if (bank.me(); as me) {
             <section class="balance-card" [class.bankrupt]="me.bankrupt" [class.debt]="me.balance < 0 && !me.bankrupt" aria-label="Your balance">
               <div class="bc-top">
-                <app-avatar [name]="me.name" [color]="me.color" size="sm" />
                 <span class="bc-name">{{ me.name }}</span>
                 @if (bank.isBanker()) { <span class="badge gold">Banker</span> }
               </div>
