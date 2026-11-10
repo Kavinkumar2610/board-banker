@@ -79,3 +79,7 @@ Thumbs.db
 
 # Real Firebase web config (template: src/app/firebase.config.example.ts)
 /src/app/firebase.config.ts
+
+# /brag launch-video output (render, Hyperframes project, plan)
+brag-output/
+brag-output-*/
