@@ -1,5 +1,6 @@
 import {
-  Player, Txn, deltaFor, fmt, isCode, keepAwake, newCode, parseQr, quotaReset, rank, setCurrency, signed, txnText, undoable,
+  Player, Txn, deedValue, deltaFor, fmt, isCode, keepAwake, newCode, parseQr, quotaReset, rank, retry, setCurrency, signed, txnText,
+  undoable,
 } from './money';
 
 const p = (id: string, balance: number, bankrupt = false, bankruptAt?: number): Player =>
@@ -37,6 +38,34 @@ describe('money', () => {
     expect(order).toEqual(['c', 'a', 'd', 'b']);
   });
 
+  it('ranks by net worth once properties are entered', () => {
+    const order = rank([{ ...p('rich', 900), assets: 0 }, { ...p('landlord', 300), assets: 1000 }, p('cash', 800)]).map(x => x.id);
+    expect(order).toEqual(['landlord', 'rich', 'cash']);
+  });
+
+  it('retries only temporary failures, a limited number of times', async () => {
+    const busy = (e: unknown) => e === 'busy';
+    const flaky = (fails: number, error = 'busy') => {
+      let calls = 0;
+      return { fn: async () => (++calls <= fails ? Promise.reject(error) : 'ok'), calls: () => calls };
+    };
+    const once = flaky(1);
+    expect(await retry(once.fn, busy, [0, 0])).toBe('ok');
+    expect(once.calls()).toBe(2);
+    const broken = flaky(1, 'broken');
+    await expect(retry(broken.fn, busy, [0, 0])).rejects.toBe('broken');
+    expect(broken.calls()).toBe(1); // a real error isn't retried
+    const down = flaky(9);
+    await expect(retry(down.fn, busy, [0, 0])).rejects.toBe('busy');
+    expect(down.calls()).toBe(3); // the first try plus one per wait
+  });
+
+  it('values a property card at its printed prices', () => {
+    const deed = { name: 'X', mortgage: 1000, house: 500, hotel: 500, houses: 3, hotels: 0, scanned: true };
+    expect(deedValue(deed)).toBe(2500);
+    expect(deedValue({ ...deed, houses: 0, hotels: 1 })).toBe(1500);
+  });
+
   it('computes my side of a transaction', () => {
     expect(deltaFor(t('pay', 'me', 'bob', 50), 'me')).toBe(-50);
     expect(deltaFor(t('pay', 'bob', 'me', 50), 'me')).toBe(50);
@@ -54,6 +83,9 @@ describe('money', () => {
     const name = (id: string | null) => id ?? 'Bank';
     expect(txnText(t('pay', 'me', 'bob', 5), name, 'me')).toBe('You paid bob');
     expect(txnText(t('adjust', null, 'me', 5), name, 'me')).toBe('Banker corrected your balance');
+    expect(txnText(t('grab', null, null, 1000), name, 'me')).toBe('Cash grab · the bank threw cash');
+    expect(txnText(t('grab', null, 'me', 300), name, 'me')).toBe('You grabbed cash');
+    expect(deltaFor(t('grab', null, null, 1000), 'me')).toBe(0);
   });
 
   it('knows when the free quota resets (midnight US Pacific)', () => {

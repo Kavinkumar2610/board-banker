@@ -2,12 +2,12 @@ import { Injectable, computed, signal } from '@angular/core';
 import { signInAnonymously } from 'firebase/auth';
 import {
   DocumentSnapshot, QueryDocumentSnapshot, Timestamp, Unsubscribe, addDoc, collection, deleteDoc, doc, getDoc, getDocs,
-  limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where, writeBatch,
+  increment, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import {
-  BankError, CURRENCIES, Game, GoRequest, KEEP_DAYS, Kind, MAX_PLAYERS, PayRequest, Player, TOKENS, Txn, fmt, newCode, quotaReset, rank,
-  setCurrency,
+  BankError, CURRENCIES, GRAB_NOTE, GRAB_NOTES, Game, GoRequest, Grab, KEEP_DAYS, Kind, MAX_PLAYERS, PayRequest, Player, TOKENS, Txn, fmt, newCode,
+  quotaReset, rank, setCurrency,
 } from './money';
 
 interface BeforeInstallPromptEvent extends Event { prompt(): Promise<void> }
@@ -36,6 +36,11 @@ export class GameService {
   readonly goRequests = signal<GoRequest[]>([]);
   /** Latest transaction someone else made that touched my cash. */
   readonly incoming = signal<Txn | null>(null);
+  /** The latest cash grab, and who has taken which note (note number → player id). */
+  readonly grab = signal<Grab | null>(null);
+  readonly claims = signal<Record<string, string>>({});
+  /** True once the current grab's claims have loaded, so whether it's already over is known. */
+  readonly claimsReady = signal(false);
   readonly online = signal(navigator.onLine);
   readonly installPrompt = signal<BeforeInstallPromptEvent | null>(null);
 
@@ -46,6 +51,7 @@ export class GameService {
 
   private user?: Promise<string>;
   private unsubs: Unsubscribe[] = [];
+  private claimsUnsub?: Unsubscribe;
 
   constructor() {
     addEventListener('online', () => this.online.set(true));
@@ -111,6 +117,22 @@ export class GameService {
         this.goRequests.set(s.docs
           .map(d => ({ ...(d.data({ serverTimestamps: 'estimate' }) as PayRequest & { createdAt?: { toMillis(): number } }), id: d.id }))
           .sort((a, b) => (a.createdAt?.toMillis() ?? 0) - (b.createdAt?.toMillis() ?? 0)))),
+      onSnapshot(query(collection(g, 'grabs'), orderBy('createdAt', 'desc'), limit(1)), s => {
+        const d = s.docs[0];
+        const x = d?.data({ serverTimestamps: 'estimate' });
+        const grab: Grab | null = d ? { id: d.id, each: x!['each'], count: x!['count'], createdAt: x!['createdAt']?.toDate?.() ?? null } : null;
+        if (grab?.id !== this.grab()?.id) {
+          this.claimsUnsub?.();
+          this.claims.set({});
+          this.claimsReady.set(false);
+          this.claimsUnsub = grab ? onSnapshot(collection(g, 'grabs', grab.id, 'claims'), c => {
+            this.claims.set(Object.fromEntries(c.docs.map(d => [d.id, d.data()['by'] as string])));
+            this.claimsReady.set(true);
+          }) : undefined;
+        }
+        this.grab.set(grab);
+      }),
+      () => this.claimsUnsub?.(),
     ];
   }
 
@@ -125,6 +147,9 @@ export class GameService {
     this.txns.set([]);
     this.goRequests.set([]);
     this.incoming.set(null);
+    this.grab.set(null);
+    this.claims.set({});
+    this.claimsReady.set(false);
     setCurrency();
   }
 
@@ -166,8 +191,12 @@ export class GameService {
     const cutoff = Timestamp.fromMillis(Date.now() - 86_400_000);
     const old = await getDocs(query(collection(db, 'games'), where('expireAt', '<', cutoff), limit(5)));
     for (const game of old.docs) {
-      for (const sub of ['players', 'requests', 'txns']) {
-        const docs = (await getDocs(collection(game.ref, sub))).docs;
+      for (const sub of ['players', 'requests', 'txns', 'grabs']) {
+        let docs = (await getDocs(collection(game.ref, sub))).docs;
+        if (sub === 'grabs') {
+          const claims = await Promise.all(docs.map(d => getDocs(collection(d.ref, 'claims'))));
+          docs = [...claims.flatMap(c => c.docs), ...docs];
+        }
         for (let i = 0; i < docs.length; i += 450) {
           const batch = writeBatch(db);
           docs.slice(i, i + 450).forEach(d => batch.delete(d.ref));
@@ -230,6 +259,11 @@ export class GameService {
 
   end() {
     return updateDoc(this.ref(), { status: 'ended', endedAt: serverTimestamp() });
+  }
+
+  /** After the game: what my properties are worth, so the standings go by net worth. */
+  setAssets(amount: number) {
+    return updateDoc(this.ref('players', this.uid()!), { assets: amount });
   }
 
   // ---- money -------------------------------------------------------------------------------
@@ -303,6 +337,25 @@ export class GameService {
   approveGo(r: GoRequest) { return this.move(null, r.to, r.amount, 'salary', { reqId: r.id }); }
   declineGo(r: GoRequest) { return updateDoc(this.ref('requests', r.id), { status: 'declined' }); }
   pay(to: string, amount: number) { return this.move(this.uid(), to, amount, 'pay'); }
+
+  /** Pays every other player still in, one ordinary payment each, so the rules check each one as usual. */
+  async payEveryone(amount: number) {
+    const to = this.players().filter(p => p.id !== this.uid() && !p.bankrupt);
+    const total = amount * to.length;
+    // Paying past the limit would bankrupt you mid-way, and only some players would get paid.
+    if (this.me()!.balance - total < -(this.game()!.debtLimit ?? 0)) {
+      throw new BankError(`That’s ${fmt(total)} in total, more than you can pay. Pay players one at a time instead.`);
+    }
+    const names = (ps: Player[]) => new Intl.ListFormat('en').format(ps.map(p => p.name));
+    for (const [i, p] of to.entries()) {
+      try {
+        await this.pay(p.id, amount);
+      } catch (e) {
+        if (!i) throw e;
+        throw new BankError(`Paid ${names(to.slice(0, i))}, but couldn’t pay ${names(to.slice(i))}. ${errorText(e)}`);
+      }
+    }
+  }
   payBank(amount: number) { return this.move(this.uid(), null, amount, 'bank-in'); }
   bankPays(to: string, amount: number) { return this.move(null, to, amount, 'bank-out'); }
   bankCollects(from: string, amount: number) { return this.move(from, null, amount, 'bank-in'); }
@@ -324,6 +377,41 @@ export class GameService {
         expireAt: this.expireAt,
       });
     });
+  }
+
+  // ---- cash grab ---------------------------------------------------------------------------
+
+  /** The banker throws all the bank's notes of GRAB_NOTE. Notes nobody grabs simply stay in the bank. */
+  async startGrab() {
+    const batch = writeBatch(db);
+    batch.set(doc(collection(db, 'games', this.code()!, 'grabs')), {
+      each: GRAB_NOTE, count: GRAB_NOTES, createdAt: serverTimestamp(), expireAt: this.expireAt,
+    });
+    batch.set(doc(collection(db, 'games', this.code()!, 'txns')), {
+      kind: 'grab', from: null, to: null, amount: GRAB_NOTE * GRAB_NOTES, by: this.uid(), at: serverTimestamp(), expireAt: this.expireAt,
+    });
+    await batch.commit();
+  }
+
+  /**
+   * Takes one note: the claim and the money land in one write. If someone tapped it first, the database
+   * refuses the claim (it already exists), so the whole write fails and nobody is paid twice.
+   */
+  async grabNote(note: number) {
+    const g = this.grab()!;
+    const uid = this.uid()!;
+    const batch = writeBatch(db);
+    batch.set(this.ref('grabs', g.id, 'claims', String(note)), { by: uid, at: serverTimestamp(), expireAt: this.expireAt });
+    batch.update(this.ref('players', uid), { balance: increment(g.each), grabClaim: [g.id, String(note)] });
+    await batch.commit();
+  }
+
+  /** One activity line per player once a grab is over. The fixed id keeps it to one line if this runs twice. */
+  logGrab(g: Grab, amount: number) {
+    const uid = this.uid()!;
+    return setDoc(this.ref('txns', `grab-${g.id}-${uid}`), {
+      kind: 'grab', from: null, to: uid, amount, by: uid, at: serverTimestamp(), expireAt: this.expireAt,
+    }).catch(() => undefined); // already logged: the rules refuse the overwrite
   }
 
   // ---- payment requests (the "Get paid" QR) -------------------------------------------------

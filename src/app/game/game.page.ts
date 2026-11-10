@@ -8,17 +8,19 @@ import {
 } from '@ionic/angular';
 import { addIcons } from 'ionicons';
 import {
-  alertCircle, arrowRedo, arrowRedoOutline, arrowUndoOutline, business, businessOutline, checkmarkCircle, chevronBack,
-  chevronForward, closeCircleOutline, createOutline, ellipsisHorizontal, flagOutline, hourglassOutline, lockClosedOutline,
+  alertCircle, arrowRedo, arrowRedoOutline, arrowUndoOutline, business, businessOutline, cash, cashOutline, checkmarkCircle, chevronBack,
+  chevronForward, closeCircleOutline, createOutline, ellipsisHorizontal, flagOutline, hourglassOutline, lockClosedOutline, people,
   qrCodeOutline, scanOutline, searchOutline, shareOutline, swapHorizontalOutline, trendingDownOutline, trophy,
 } from 'ionicons/icons';
 import QRCode from 'qrcode';
 import { GameService, errorText } from '../game.service';
 import {
-  BankError, CURRENCIES, GoRequest, Kind, MAX_PLAYERS, MIN_PLAYERS, Player, Txn, buzz, cleanCode, currencyOf, deltaFor, fmt, joinUrl,
-  keepAwake, parseQr, prefs, signed, txnText, undoable,
+  BankError, CURRENCIES, Deed, GRAB_NOTE, GRAB_NOTES, GoRequest, Kind, MAX_PLAYERS, MIN_PLAYERS, Player, Txn, buzz, cleanCode, currencyOf,
+  deltaFor, fmt, joinUrl, keepAwake, parseQr, prefs, signed, txnText, undoable, worth,
 } from '../money';
 import { Avatar } from '../ui/avatar';
+import { CashGrab } from '../ui/cash-grab';
+import { PropertyModal } from '../ui/property-modal';
 import { MoneyModal, Party, Payer } from '../ui/money-modal';
 import { RequestModal } from '../ui/request-modal';
 import { ScanModal } from '../ui/scan-modal';
@@ -31,7 +33,7 @@ type MoneyField = 'startingCash' | 'salary' | 'debtLimit';
   styleUrls: ['game.page.scss'],
   imports: [
     IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonIcon, IonContent, IonFooter, IonSegment, IonSegmentButton, IonLabel,
-    IonSpinner, IonInput, IonToggle, DatePipe, NgTemplateOutlet, RouterLink, Avatar,
+    IonSpinner, IonInput, IonToggle, DatePipe, NgTemplateOutlet, RouterLink, Avatar, CashGrab,
   ],
 })
 export class GamePage implements ViewDidEnter, ViewWillLeave {
@@ -76,6 +78,7 @@ export class GamePage implements ViewDidEnter, ViewWillLeave {
   private readonly icons: Record<Kind, string> = {
     start: 'flag-outline', pay: 'swap-horizontal-outline', salary: 'arrow-redo-outline', 'bank-in': 'business-outline',
     'bank-out': 'business-outline', adjust: 'create-outline', undo: 'arrow-undo-outline', bankrupt: 'trending-down-outline',
+    grab: 'cash-outline',
   };
 
   protected readonly view = computed(() => {
@@ -91,11 +94,23 @@ export class GamePage implements ViewDidEnter, ViewWillLeave {
   protected readonly bothTabs = computed(() => this.bank.isBanker() && !!this.bank.me());
   protected readonly activeTab = computed(() => (!this.bank.me() ? 'bank' : this.bothTabs() ? this.tab() : 'wallet'));
   protected readonly others = computed(() => this.bank.players().filter(p => p.id !== this.bank.uid()));
+  /** Other players still in, who "Pay everyone" pays. */
+  protected readonly payable = computed(() => this.others().filter(p => !p.bankrupt));
+  /** The cash grab on this screen: opens when the banker throws, closes when this player taps Done. */
+  protected readonly grabOpen = signal<string | null>(null);
+  private grabSeen = '';
   protected readonly solvent = computed(() => this.bank.players().filter(p => !p.bankrupt));
   protected readonly inPlay = computed(() => this.bank.players().reduce((sum, p) => sum + p.balance, 0));
   protected readonly lastStanding = computed(() =>
     this.bank.players().length >= MIN_PLAYERS && this.solvent().length === 1 ? this.solvent()[0] : null);
-  protected readonly winner = computed(() => this.bank.ranked().find(p => !p.bankrupt) ?? null);
+  /** A finished game with more than one player still in goes by net worth, so each of them adds their properties. */
+  protected readonly needsAssets = computed(() =>
+    this.view() === 'ended' && !!this.bank.game()?.startedAt && this.solvent().length > 1);
+  protected readonly waitingFor = computed(() => (this.needsAssets() ? this.solvent().filter(p => p.assets === undefined) : []));
+  protected readonly winner = computed(() => (this.waitingFor().length ? null : this.bank.ranked().find(p => !p.bankrupt) ?? null));
+  protected readonly worth = worth;
+  /** My property cards this session, kept if I reopen the sheet to fix something. */
+  private readonly deeds = signal<Deed[]>([]);
   protected readonly joinQr = signal('');
   /** "Collected!" flash after the banker's own GO. */
   protected readonly goCooldown = signal(false);
@@ -124,8 +139,8 @@ export class GamePage implements ViewDidEnter, ViewWillLeave {
 
   constructor() {
     addIcons({
-      alertCircle, arrowRedo, arrowRedoOutline, arrowUndoOutline, business, businessOutline, checkmarkCircle, chevronBack,
-      chevronForward, closeCircleOutline, createOutline, ellipsisHorizontal, flagOutline, hourglassOutline, lockClosedOutline,
+      alertCircle, arrowRedo, arrowRedoOutline, arrowUndoOutline, business, businessOutline, cash, cashOutline, checkmarkCircle, chevronBack,
+      chevronForward, closeCircleOutline, createOutline, ellipsisHorizontal, flagOutline, hourglassOutline, lockClosedOutline, people,
       qrCodeOutline, scanOutline, searchOutline, shareOutline, swapHorizontalOutline, trendingDownOutline, trophy,
     });
 
@@ -171,6 +186,20 @@ export class GamePage implements ViewDidEnter, ViewWillLeave {
     effect(() => {
       const t = this.bank.incoming();
       if (t) untracked(() => void this.notify(t));
+    });
+    effect(() => {
+      // Every phone opens a new cash grab the moment the banker throws, unless it's old or already over.
+      const g = this.bank.grab();
+      if (!g || !this.bank.claimsReady() || this.view() !== 'active') return;
+      untracked(() => {
+        if (g.id === this.grabSeen) return;
+        this.grabSeen = g.id;
+        const fresh = Date.now() - (g.createdAt?.getTime() ?? 0) < 10 * 60_000;
+        if (fresh && Object.keys(this.bank.claims()).length < g.count) {
+          this.grabOpen.set(g.id);
+          buzz([40, 60, 40]);
+        }
+      });
     });
     effect(() => {
       const balance = this.bank.me()?.balance;
@@ -274,7 +303,7 @@ export class GamePage implements ViewDidEnter, ViewWillLeave {
   private async moneyModal(props: {
     title: string; party?: Party; partyLabel?: string; fixed?: number; initial?: number; allowZero?: boolean;
     payer?: Payer; debtLimit?: number; hint?: string; cta: (n: number) => string; run: (n: number) => Promise<unknown>; doneText: string;
-    color?: 'primary' | 'secondary' | 'danger';
+    color?: 'primary' | 'secondary' | 'danger'; times?: number; allowBust?: boolean;
   }) {
     const m = await this.modals.create({ component: MoneyModal, componentProps: props });
     await m.present();
@@ -561,10 +590,45 @@ export class GamePage implements ViewDidEnter, ViewWillLeave {
   }
 
   private async choosePlayer() {
-    const options = this.others().filter(p => !p.bankrupt).map(p => ({ text: p.name, value: p }));
-    if (!options.length) return this.toast('There’s nobody else to pay.', 'dark');
-    const p = await this.choose('Who are you paying?', options);
-    if (p) await this.sendTo(p);
+    const players = this.payable();
+    if (!players.length) return this.toast('There’s nobody else to pay.', 'dark');
+    const everyone = players.length > 1 ? [{ text: `Everyone (${players.length} players)`, value: 'everyone' as const }] : [];
+    const p = await this.choose<Player | 'everyone'>('Who are you paying?', [...everyone, ...players.map(p => ({ text: p.name, value: p }))]);
+    if (p === 'everyone') await this.payEveryone();
+    else if (p) await this.sendTo(p);
+  }
+
+  /** For cards that make you pay each player: one amount, paid to every player still in. */
+  protected async payEveryone() {
+    const to = this.payable();
+    await this.moneyModal({
+      title: 'Pay everyone', party: { name: new Intl.ListFormat('en').format(to.map(p => p.name)), color: null, icon: 'people' },
+      partyLabel: 'To', ...this.payerProps(), times: to.length, allowBust: false,
+      cta: n => (n ? `Pay ${fmt(n)} each · ${fmt(n * to.length)} total` : 'Enter an amount'),
+      run: n => this.bank.payEveryone(n), doneText: 'Paid everyone',
+    });
+  }
+
+  protected names(players: Player[]) {
+    return new Intl.ListFormat('en').format(players.map(p => p.name));
+  }
+
+  protected async openProperties() {
+    const m = await this.modals.create({ component: PropertyModal, componentProps: { deeds: this.deeds } });
+    await m.present();
+    const { data, role } = await m.onDidDismiss<number>();
+    if (role === 'done') await this.toast(`Properties added: ${fmt(data ?? 0)}`, 'primary', 'checkmark-circle');
+  }
+
+  /** Banker: the bank throws all its notes of one value on the table and everyone scrambles for them. */
+  protected async throwCash() {
+    const notes = `${GRAB_NOTES} ${fmt(GRAB_NOTE)} notes (${fmt(GRAB_NOTES * GRAB_NOTE)})`;
+    if (!(await this.confirm('Cash grab', `Throw all ${notes} from the bank? Everyone grabs at once. Notes nobody takes stay in the bank.`, 'Throw'))) return;
+    try {
+      await this.bank.startGrab();
+    } catch (e) {
+      await this.toast(errorText(e), 'danger');
+    }
   }
 
   protected async sendTo(p: Player) {

@@ -347,13 +347,39 @@ async function main() {
     await shot(bob, 'bankrupt', 'Bankrupt: cash handed over, player is out');
   });
 
-  await step('banker ends the game; everyone sees standings', async () => {
+  await step('banker ends the game; players still in add their properties', async () => {
     await btn(ben, 'Game menu').click();
     await sheetBtn(ben, 'End game').click();
     await alertBtn(ben, 'End game').click();
+    await see(alice, 'Waiting for');
+    await shot(alice, 'results-waiting', 'Game over: each player still in adds their properties');
+    await btn(alice, 'Add your properties').click();
+    const addDeed = async (name, prices, houses = 0) => {
+      const deeds = alice.page.locator('app-property-modal li.deed');
+      const n = await deeds.count();
+      await btn(alice, 'Add manually').click();
+      const deed = deeds.nth(n); // the new card, once it's drawn
+      await deed.waitFor();
+      await deed.getByLabel('Property name').fill(name);
+      for (const [label, value] of Object.entries(prices)) await deed.getByLabel(label).fill(String(value));
+      for (let i = 0; i < houses; i++) await deed.getByRole('button', { name: 'One more house' }).click();
+    };
+    await addDeed('Harbour Street', { Mortgage: 200, 'House price': 200, 'Hotel price': 200 }, 2); // 200 + 2 × 200
+    await addDeed('North Station', { Mortgage: 100 });
+    await see(alice, 'Submit $700');
+    await shot(alice, 'properties', 'Net worth: scan or type each property card, then add houses and hotels');
+    await alice.page.getByRole('button', { name: 'Submit $700' }).click();
+    await toast(alice, 'Properties added');
+    await see(ben, 'Waiting for Ben');
+  });
+
+  await step('once everyone has added theirs, the winner is by net worth', async () => {
+    await btn(ben, 'Add your properties').click();
+    await ben.page.getByRole('button', { name: 'Submit $0' }).click();
     await see(alice, 'Alice wins!');
     await see(bob, 'Alice wins!');
-    await shot(alice, 'results', 'Game over: final standings');
+    await see(alice, 'property $700');
+    await shot(alice, 'results', 'Game over: standings by net worth (cash + properties)');
   });
 
   await step('home stops offering an ended game', async () => {
@@ -756,9 +782,89 @@ async function pwa() {
   server.close();
 }
 
+// ---- scenario: card actions (pay everyone, cash grab) -------------------------------------
+
+async function cards() {
+  const kim = await phone('kim');
+  let code, siti, ravi;
+
+  await step('banker who plays creates a game; two players join and it starts', async () => {
+    code = await createGame(kim, 'Kim');
+    const browser = await chromium.launch({ channel: 'chrome', headless: true });
+    siti = await phone('siti', { browser });
+    ravi = await phone('ravi', { browser });
+    await joinByLink(siti, code, 'Siti');
+    await joinByLink(ravi, code, 'Ravi');
+    await see(kim, 'Ravi');
+    await btn(kim, 'Start game · $1,500 each').click();
+    for (const p of [kim, siti, ravi]) await balanceIs(p, '$1,500');
+  });
+
+  await step('Siti pays everyone $50 in one go', async () => {
+    await siti.page.getByRole('button', { name: /^Everyone/ }).click();
+    await keypad(siti, 50);
+    await see(siti, 'Pay $50 each · $100 total');
+    await shot(siti, 'pay-everyone', 'Pay everyone: one amount, paid to each player still in');
+    await btn(siti, 'Pay $50 each · $100 total').click();
+    await siti.page.getByRole('heading', { name: 'Paid everyone' }).waitFor();
+    await balanceIs(siti, '$1,400');
+    await balanceIs(kim, '$1,550');
+    await balanceIs(ravi, '$1,550');
+  });
+
+  await step('paying everyone more than you have is refused, not a bankruptcy', async () => {
+    await siti.page.waitForTimeout(1500);
+    await siti.page.getByRole('button', { name: /^Everyone/ }).click();
+    await keypad(siti, 900);
+    await see(siti, 'more than you can pay');
+    await siti.page.locator('ion-footer ion-button.button-disabled').waitFor();
+    await shot(siti, 'pay-everyone-refused', 'Pay everyone past what you can pay: refused, so nobody is paid by halves');
+    await btn(siti, 'Cancel').click();
+  });
+
+  await step('banker throws all 30 $100 notes; every phone gets them and a 3-2-1', async () => {
+    await kim.page.locator('ion-segment-button', { hasText: 'Bank' }).click();
+    await btn(kim, 'Cash grab').click();
+    await kim.page.locator('ion-alert').getByText('Throw all 30 $100 notes ($3,000)').waitFor();
+    await shot(kim, 'grab-throw', 'Banker: the bank throws all 30 of its $100 notes, like the card says');
+    await alertBtn(kim, 'Throw').click();
+    for (const p of [siti, ravi]) await see(p, 'Cash grab!');
+    await siti.page.locator('app-cash-grab .count').waitFor();
+    await shot(siti, 'grab-countdown', 'Every phone: the notes land, then the same 3-2-1 (timed by the server)');
+  });
+
+  await step('three phones grab at once; every note pays exactly once', async () => {
+    const live = p => p.page.locator('app-cash-grab button.note:not([disabled])');
+    await Promise.all([kim, siti, ravi].map(p => live(p).first().waitFor()));
+    await shot(ravi, 'grab-go', 'Cash grab: the first tap on a note takes it');
+    const grabAll = async p => {
+      for (let i = 0; i < 120; i++) {
+        const n = await live(p).count();
+        if (!n) return;
+        await live(p).nth(Math.floor(Math.random() * n)).click({ timeout: 400 }).catch(() => {});
+      }
+    };
+    await Promise.all([kim, siti, ravi].map(grabAll));
+    for (const p of [kim, siti, ravi]) await see(p, 'All grabbed!');
+    // Straight from the database: the players' total went up by exactly what the bank threw.
+    const res = await fetch(`${FIRESTORE}/games/${code}/players`, { headers: { Authorization: 'Bearer owner' } });
+    const total = (await res.json()).documents.reduce((sum, d) => sum + Number(d.fields.balance.integerValue), 0);
+    if (total !== 7500) throw new Error(`players hold $${total}, expected $7,500`);
+    await shot(siti, 'grab-results', 'All grabbed: who got what; notes nobody grabs would stay in the bank');
+  });
+
+  await step('Done closes it; the activity log records the grab', async () => {
+    await btn(siti, 'Done').click();
+    await see(siti, 'Cash grab · the bank threw cash');
+    await siti.page.locator('app-cash-grab').waitFor({ state: 'detached' });
+  });
+
+  await closeAll();
+}
+
 // ---- run ----------------------------------------------------------------------------------
 
-const scenarios = { main, rm, edges, pwa };
+const scenarios = { main, rm, cards, edges, pwa };
 // A subset run keeps the other scenarios' screenshots.
 const rerun = only.length ? only : Object.keys(scenarios);
 const manifestFile = path.join(OUT, 'manifest.json');

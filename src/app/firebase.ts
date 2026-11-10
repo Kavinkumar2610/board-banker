@@ -5,7 +5,7 @@ import { environment } from '../environments/environment';
 import { firebaseConfig } from './firebase.config';
 
 // Web config ships in the bundle anyway; the Firestore rules are what protect the data.
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 
 // Anonymous auth only: the persisted uid is what lets a player rejoin after a refresh.
 export const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });

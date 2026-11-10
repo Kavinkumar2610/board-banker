@@ -4,14 +4,14 @@ import {
   ModalController,
 } from '@ionic/angular';
 import { addIcons } from 'ionicons';
-import { alertCircle, business, checkmark } from 'ionicons/icons';
+import { alertCircle, business, checkmark, people } from 'ionicons/icons';
 import { errorText } from '../game.service';
 import { buzz, fmt } from '../money';
 import { AmountPad } from './amount-pad';
 import { Avatar } from './avatar';
 
-/** Who the money goes to or comes from; color null means the bank. */
-export interface Party { name: string; color: number | null }
+/** Who the money goes to or comes from; color null means the bank, or a group shown with `icon`. */
+export interface Party { name: string; color: number | null; icon?: string }
 
 /** Whose cash a payment spends; name null means "you". */
 export interface Payer { name: string | null; balance: number }
@@ -49,7 +49,7 @@ export interface Payer { name: string | null; balance: number }
           @if (party(); as p) {
             <div class="party">
               @if (p.color === null) {
-                <span class="avatar sm bank" aria-hidden="true"><ion-icon name="business" /></span>
+                <span class="avatar sm bank" aria-hidden="true"><ion-icon [name]="p.icon ?? 'business'" /></span>
               } @else {
                 <app-avatar [name]="p.name" [color]="p.color" size="sm" />
               }
@@ -97,6 +97,10 @@ export class MoneyModal {
   /** The player whose cash this spends; null when the bank pays. */
   readonly payer = input<Payer | null>(null);
   readonly debtLimit = input(0);
+  /** How many times the amount is paid (once per player for "Pay everyone"). */
+  readonly times = input(1);
+  /** False refuses a payment past the debt limit instead of offering to go bankrupt. */
+  readonly allowBust = input(true);
   /** Shown instead of the balance line when no player pays. */
   readonly hint = input('');
   readonly cta = input.required<(n: number) => string>();
@@ -112,9 +116,9 @@ export class MoneyModal {
   protected readonly done = signal(false);
   protected readonly wentBust = signal(false);
   protected readonly error = signal('');
-  protected readonly valid = computed(() => this.allowZero() || this.amount() > 0);
+  protected readonly valid = computed(() => (this.allowZero() || this.amount() > 0) && (this.allowBust() || !this.bust()));
 
-  private readonly after = computed(() => (this.payer()?.balance ?? 0) - this.amount());
+  private readonly after = computed(() => (this.payer()?.balance ?? 0) - this.amount() * this.times());
   /** Past the debt limit: paying in full makes the payer bankrupt. */
   protected readonly bust = computed(() => !!this.payer() && this.amount() > 0 && this.after() < -this.debtLimit());
 
@@ -123,6 +127,9 @@ export class MoneyModal {
     if (!p) return { text: this.hint(), tone: '' };
     const you = p.name === null;
     const limit = this.debtLimit();
+    if (this.bust() && !this.allowBust()) {
+      return { text: `${fmt(this.amount() * this.times())} in total is more than you can pay. Pay players one at a time.`, tone: 'err' };
+    }
     if (this.bust()) {
       const who = you ? 'you' : p.name;
       return {
@@ -136,13 +143,13 @@ export class MoneyModal {
 
   protected readonly ctaText = computed(() => {
     const text = this.cta()(this.amount());
-    if (!this.bust()) return text;
+    if (!this.bust() || !this.allowBust()) return text;
     const name = this.payer()!.name;
     return name === null ? `${text} and go bankrupt` : `${text} · ${name} goes bankrupt`;
   });
 
   constructor() {
-    addIcons({ alertCircle, business, checkmark });
+    addIcons({ alertCircle, business, checkmark, people });
   }
 
   protected async go() {

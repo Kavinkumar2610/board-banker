@@ -6,6 +6,9 @@ rules_version = '2';
 // - GO salary is paid by the banker, against the player's open GO request for exactly the salary.
 // - A player can only raise someone else's balance by the exact amount they paid in the same write.
 // - Only the banker pays out of the bank, corrects balances, reverses transactions or ends the game.
+// - Only the banker throws a cash grab (from the bank). A player's balance rises by exactly one note per note
+//   they claim, in the same write; each note can be claimed once, and only after the 3-second countdown.
+// - Once the game ends, a player still in can set only the value of their own properties, never their cash.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
@@ -21,6 +24,8 @@ service cloud.firestore {
       function playerPath(uid) { return /databases/$(database)/documents/games/$(code)/players/$(uid); }
       function isBanker() { return signedIn() && game().bankerUid == request.auth.uid; }
       function isMember() { return isBanker() || exists(playerPath(request.auth.uid)); }
+      function grabPath(gid) { return /databases/$(database)/documents/games/$(code)/grabs/$(gid); }
+      function claimPath(gid, n) { return /databases/$(database)/documents/games/$(code)/grabs/$(gid)/claims/$(n); }
 
       function expired() { return resource.data.expireAt < request.time; }
 
@@ -83,6 +88,24 @@ service cloud.firestore {
             && get(payer).data.balance - getAfter(payer).data.balance == d().balance - o().balance;
         }
 
+        // After the game: each player still in enters what their own properties are worth (net worth = cash + this).
+        function assetsEdit() {
+          return uid == request.auth.uid && game().status == 'ended' && o().bankrupt == false
+            && changed().hasOnly(['assets']) && money(d().assets);
+        }
+
+        // Grabbing a cash-grab note: your own balance rises by exactly that note, in the write that claims it.
+        function grabbed() {
+          let c = d().get('grabClaim', null);
+          return c is list && c.size() == 2 && c[0] is string && c[1] is string
+            && uid == request.auth.uid && game().status == 'active'
+            && o().bankrupt == false && d().bankrupt == false
+            && changed().hasOnly(['balance', 'grabClaim'])
+            && !exists(claimPath(c[0], c[1]))
+            && getAfter(claimPath(c[0], c[1])).data.by == request.auth.uid
+            && d().balance - o().balance == get(grabPath(c[0])).data.each;
+        }
+
         allow read: if signedIn();
 
         allow create: if signedIn() && uid == request.auth.uid
@@ -97,10 +120,42 @@ service cloud.firestore {
         allow delete: if signedIn() && game().status == 'lobby' && (uid == request.auth.uid || isBanker());
         allow delete: if signedIn() && expired();
 
-        allow update: if signedIn()
-          && changed().hasOnly(['balance', 'bankrupt', 'bankruptAt'])
-          && balance(d().balance) && d().bankrupt is bool
-          && (bankerEdit() || selfEdit() || credit());
+        allow update: if signedIn() && balance(d().balance) && d().bankrupt is bool && (
+          (changed().hasOnly(['balance', 'bankrupt', 'bankruptAt']) && (bankerEdit() || selfEdit() || credit()))
+          || grabbed()
+          || assetsEdit()
+        );
+      }
+
+      match /grabs/{gid} {
+        allow read: if signedIn();
+        allow delete: if signedIn() && expired();
+
+        // Only the banker throws, and the money comes from the bank: no player's balance pays for it.
+        allow create: if isBanker() && game().status == 'active'
+          && request.resource.data.keys().hasOnly(['each', 'count', 'createdAt', 'expireAt'])
+          && request.resource.data.each is int && request.resource.data.each > 0
+          && request.resource.data.count is int && request.resource.data.count > 0 && request.resource.data.count <= 30
+          && money(request.resource.data.each * request.resource.data.count)
+          && request.resource.data.expireAt == game().expireAt
+          && request.resource.data.createdAt == request.time;
+
+        match /claims/{n} {
+          allow read: if signedIn();
+          allow delete: if signedIn() && expired();
+
+          // First tap wins: a claim is never overwritten, and it only counts with the money in the same write.
+          // The note number must be written plainly ("1", not "01"), so no note can be claimed under two ids.
+          allow create: if signedIn() && game().status == 'active'
+            && exists(playerPath(request.auth.uid))
+            && request.resource.data.keys().hasOnly(['by', 'at', 'expireAt'])
+            && request.resource.data.by == request.auth.uid
+            && request.resource.data.at == request.time
+            && request.resource.data.expireAt == game().expireAt
+            && string(int(n)) == n && int(n) >= 0 && int(n) < get(grabPath(gid)).data.count
+            && request.time >= get(grabPath(gid)).data.createdAt + duration.value(3, 's')
+            && getAfter(playerPath(request.auth.uid)).data.get('grabClaim', null) == [gid, n];
+        }
       }
 
       match /requests/{id} {
@@ -149,7 +204,7 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['kind', 'from', 'to', 'amount', 'by', 'at', 'undoOf', 'bust', 'expireAt'])
           && request.resource.data.expireAt == game().expireAt
           && request.resource.data.by == request.auth.uid
-          && request.resource.data.kind in ['start', 'pay', 'salary', 'bank-in', 'bank-out', 'adjust', 'undo', 'bankrupt']
+          && request.resource.data.kind in ['start', 'pay', 'salary', 'bank-in', 'bank-out', 'adjust', 'undo', 'bankrupt', 'grab']
           && request.resource.data.amount is int
           && request.resource.data.at == request.time;
 

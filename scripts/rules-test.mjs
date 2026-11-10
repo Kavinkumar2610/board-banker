@@ -97,6 +97,7 @@ test('only the banker starts the game', async () => {
 });
 
 test('players pay each other', async () => {
+  await denied(updateDoc(g(alice.db, 'players', alice.uid), { assets: 100 })); // property values only after the game
   await pay(alice, bob.uid, 100);
   assert.equal(await balance(alice.db, alice.uid), 1400);
   assert.equal(await balance(alice.db, bob.uid), 1600);
@@ -205,6 +206,36 @@ test('outsiders cannot write to the log, players cannot undo', async () => {
   await updateDoc(doc(banker.db, ref.path), { undone: true });
 });
 
+test('a cash grab pays each player only the notes they grabbed, once', async () => {
+  const grab = { each: 100, count: 10, createdAt: serverTimestamp(), expireAt: KEEP };
+  await denied(setDoc(g(alice.db, 'grabs', 'G1'), grab));                 // only the banker throws
+  await denied(setDoc(g(banker.db, 'grabs', 'G1'), { ...grab, count: 31 }));
+  await setDoc(g(banker.db, 'grabs', 'G1'), grab);
+
+  /** The app's write: claim note n and add its value to your balance, together. */
+  const take = (u, n, amount = 100) => {
+    const b = writeBatch(u.db);
+    b.set(g(u.db, 'grabs', 'G1', 'claims', n), { by: u.uid, at: serverTimestamp(), expireAt: KEEP });
+    b.update(g(u.db, 'players', u.uid), { balance: increment(amount), grabClaim: ['G1', n] });
+    return b.commit();
+  };
+  await denied(take(alice, '0'));                                          // still counting down
+  await new Promise(r => setTimeout(r, 3100));
+
+  const before = await balance(alice.db, alice.uid);
+  await take(alice, '0');
+  assert.equal(await balance(alice.db, alice.uid), before + 100);
+  await denied(take(bob, '0'));                                            // someone got there first
+  await denied(take(alice, '0'));                                          // no note pays twice
+  await denied(take(alice, '00'));                                         // ...not even under another id
+  await denied(take(bob, '1', 500));                                       // more than the note is worth
+  await denied(take(bob, '10'));                                           // there is no 11th note
+  await denied(take(mallory, '2'));                                        // outsiders can't grab
+  await denied(setDoc(g(bob.db, 'grabs', 'G1', 'claims', '3'), { by: bob.uid, at: serverTimestamp(), expireAt: KEEP })); // claim, no money
+  await denied(updateDoc(g(bob.db, 'players', bob.uid), { balance: increment(100), grabClaim: ['G1', '4'] }));            // money, no claim
+  await take(bob, '1');
+});
+
 test('going bankrupt hands all cash to the creditor, then you are out', async () => {
   const before = await balance(alice.db, alice.uid);
   const bobBefore = await balance(alice.db, bob.uid);
@@ -230,4 +261,27 @@ test('after the game ends, money is frozen', async () => {
   await denied(updateDoc(g(bob.db, 'players', bob.uid), { balance: increment(200) }));
   await denied(updateDoc(g(banker.db, 'players', bob.uid), { balance: 1 }));
   await denied(updateDoc(g(banker.db), { status: 'lobby' }));
+});
+
+test('after the game, players add only their own property value', async () => {
+  // A fresh game: in the one above, everyone has gone bankrupt by now.
+  const g2 = (db, ...path) => doc(db, 'games', 'TESTG3', ...path);
+  await setDoc(g2(banker.db), {
+    code: 'TESTG3', bankerUid: banker.uid, bankerName: 'Banker', bankerPlays: false, status: 'lobby',
+    currency: '$', startingCash: 1500, salary: 200, debtLimit: 0, createdAt: serverTimestamp(), expireAt: KEEP,
+  });
+  await setDoc(g2(alice.db, 'players', alice.uid), player('Alice'));
+  await setDoc(g2(bob.db, 'players', bob.uid), player('Bob'));
+  await updateDoc(g2(banker.db), { status: 'active', startedAt: serverTimestamp() });
+  await denied(updateDoc(g2(alice.db, 'players', alice.uid), { assets: 100 }));                // not during the game
+  await updateDoc(g2(bob.db, 'players', bob.uid), { bankrupt: true, bankruptAt: Date.now() });
+  await updateDoc(g2(banker.db), { status: 'ended', endedAt: serverTimestamp() });
+
+  await updateDoc(g2(alice.db, 'players', alice.uid), { assets: 4200 });
+  await updateDoc(g2(alice.db, 'players', alice.uid), { assets: 3900 });                       // fixing a typo is fine
+  await denied(updateDoc(g2(alice.db, 'players', alice.uid), { assets: -1 }));
+  await denied(updateDoc(g2(alice.db, 'players', alice.uid), { assets: 10, balance: 99999 })); // not with cash
+  await denied(updateDoc(g2(mallory.db, 'players', alice.uid), { assets: 0 }));
+  await denied(updateDoc(g2(banker.db, 'players', alice.uid), { assets: 0 }));
+  await denied(updateDoc(g2(bob.db, 'players', bob.uid), { assets: 5000 }));                   // bankrupt: no properties left
 });

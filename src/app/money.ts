@@ -15,7 +15,7 @@ export const CURRENCIES = [
 export const currencyOf = (symbol?: string) => CURRENCIES.find(c => c.symbol === symbol) ?? CURRENCIES[0];
 
 export type Status = 'lobby' | 'active' | 'ended';
-export type Kind = 'start' | 'pay' | 'salary' | 'bank-in' | 'bank-out' | 'adjust' | 'undo' | 'bankrupt';
+export type Kind = 'start' | 'pay' | 'salary' | 'bank-in' | 'bank-out' | 'adjust' | 'undo' | 'bankrupt' | 'grab';
 
 export interface Game {
   code: string;
@@ -43,7 +43,16 @@ export interface Player {
   balance: number;
   bankrupt: boolean;
   bankruptAt?: number;
+  /** What their properties are worth, entered by the player once the game ends. */
+  assets?: number;
 }
+
+/** One property card at the end of the game, with the values printed on it. */
+export interface Deed { name: string; mortgage: number; house: number; hotel: number; houses: number; hotels: number; scanned: boolean }
+/** What a card counts for in net worth: its mortgage value plus the houses and hotels on it, at the card's prices. */
+export const deedValue = (d: Deed) => d.mortgage + d.houses * d.house + d.hotels * d.hotel;
+/** Cash plus properties (once the player has entered them). */
+export const worth = (p: Player) => p.balance + (p.assets ?? 0);
 
 /** `from`/`to` are player ids; null means the bank. */
 export interface Txn {
@@ -68,6 +77,14 @@ export interface PayRequest {
   paidBy?: string;
 }
 export type GoRequest = PayRequest & { id: string };
+
+/** The banker throws `count` notes of `each` from the bank; players tap them to grab them. */
+export interface Grab { id: string; each: number; count: number; createdAt: Date | null }
+// The card: grab all the 100 notes from the bank and throw them. A set has 30 of each note.
+export const GRAB_NOTES = 30;
+export const GRAB_NOTE = 100;
+/** Everyone gets the same 3-2-1 before notes can be grabbed; the database rules enforce it on server time. */
+export const GRAB_COUNTDOWN_MS = 3000;
 
 /** An error whose message is safe to show the player as-is. */
 export class BankError extends Error {}
@@ -125,12 +142,12 @@ export function parseQr(text: string): { code: string; req?: string } | null {
   return req ? { code: m[1].toUpperCase(), req } : { code: m[1].toUpperCase() };
 }
 
-/** Solvent players by cash, then bankrupt players, last to go bust first. */
+/** Solvent players by net worth (just cash until properties are entered), then bankrupt players, last to go bust first. */
 export const rank = (players: Player[]) =>
   [...players].sort((a, b) =>
     a.bankrupt !== b.bankrupt ? Number(a.bankrupt) - Number(b.bankrupt)
     : a.bankrupt ? (b.bankruptAt ?? 0) - (a.bankruptAt ?? 0)
-    : b.balance - a.balance);
+    : worth(b) - worth(a));
 
 /** How much a transaction changed `me`'s cash. */
 export const deltaFor = (t: Txn, me: string | null) =>
@@ -155,6 +172,7 @@ function describeTxn(t: Txn, name: (id: string | null) => string, me: string | n
     case 'adjust': return `Banker corrected ${t.to === me ? 'your' : `${name(t.to)}'s`} balance`;
     case 'undo': return `Reversed · ${who(t.from, true)} → ${who(t.to)}`;
     case 'bankrupt': return `${who(t.from, true)} went bankrupt` + (t.to ? ` · cash to ${who(t.to)}` : '');
+    case 'grab': return t.to ? `${who(t.to, true)} grabbed cash` : 'Cash grab · the bank threw cash';
   }
 }
 
@@ -172,6 +190,19 @@ export const prefs = {
 };
 
 export const buzz = (ms: number | number[] = 12) => navigator.vibrate?.(ms);
+
+/** Runs `fn`, waiting and trying again (once per wait) while `again(error)` says the failure is temporary. */
+export async function retry<T>(fn: () => Promise<T>, again: (e: unknown) => boolean, waits = [3000, 8000]): Promise<T> {
+  for (const ms of waits) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (!again(e)) throw e;
+    }
+    await new Promise(r => setTimeout(r, ms));
+  }
+  return fn();
+}
 
 /**
  * Keeps the screen on until the returned function is called. The OS drops the lock whenever the app is hidden,

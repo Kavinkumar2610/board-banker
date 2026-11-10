@@ -279,6 +279,18 @@
             <section class="section">
               <h2 class="section-title">Players</h2>
               <ul class="list">
+                @if (payable().length > 1 && !me.bankrupt) {
+                  <li>
+                    <button type="button" class="row" (click)="payEveryone()" [disabled]="!bank.online()">
+                      <span class="avatar bank" aria-hidden="true"><ion-icon name="people" /></span>
+                      <span class="row-main">
+                        <span class="row-title">Everyone</span>
+                        <span class="row-sub">Pay each player the same amount</span>
+                      </span>
+                      <ion-icon name="chevron-forward" class="row-chev" aria-hidden="true" />
+                    </button>
+                  </li>
+                }
                 @for (p of others(); track p.id) {
                   <li>
                     <button type="button" class="row" [class.faded]="p.bankrupt" (click)="sendTo(p)"
@@ -320,6 +332,11 @@
                 <div><dt>GO salary</dt><dd class="num">{{ fmt(g.salary) }}</dd></div>
               </dl>
             </section>
+
+            <ion-button class="grab-btn" expand="block" color="secondary" (click)="throwCash()" [disabled]="!bank.online()">
+              <ion-icon slot="start" name="cash" aria-hidden="true" />
+              Cash grab
+            </ion-button>
 
             <section class="section">
               <h2 class="section-title">Players <span>Tap to manage</span></h2>
@@ -364,8 +381,18 @@
           <h1 class="page-title">{{ winner() ? winner()!.name + ' wins!' : 'Game over' }}</h1>
           @if (lastStanding()) {
             <p class="lede">Last player standing: everyone else went bankrupt.</p>
+          } @else if (waitingFor().length) {
+            <p class="lede">Waiting for {{ names(waitingFor()) }} to add their properties. Standings so far:</p>
           } @else {
-            <p class="lede">Final standings by cash. Playing by net worth? Add the property values from the board.</p>
+            <p class="lede">Final standings by net worth: cash plus properties.</p>
+          }
+          @let me = bank.me();
+          @if (needsAssets() && me && !me.bankrupt) {
+            <ion-button class="assets-btn" expand="block" [fill]="me.assets === undefined ? 'solid' : 'outline'"
+              [color]="me.assets === undefined ? 'primary' : 'light'" (click)="openProperties()"
+              [disabled]="!bank.online()">
+              {{ me.assets === undefined ? 'Add your properties' : 'Your properties: ' + fmt(me.assets) + ' · Edit' }}
+            </ion-button>
           }
           <ol class="list ranking">
             @for (p of bank.ranked(); track p.id; let i = $index) {
@@ -374,9 +401,13 @@
                 <app-avatar [name]="p.name" [color]="p.color" />
                 <span class="row-main">
                   <span class="row-title">{{ p.name }} @if (p.id === bank.uid()) { <span class="badge">You</span> }</span>
-                  @if (p.bankrupt) { <span class="row-sub">Bankrupt</span> }
+                  @if (p.bankrupt) {
+                    <span class="row-sub">Bankrupt</span>
+                  } @else if (needsAssets()) {
+                    <span class="row-sub">{{ p.assets === undefined ? 'Adding properties…' : 'Cash ' + fmt(p.balance) + ' + property ' + fmt(p.assets) }}</span>
+                  }
                 </span>
-                <span class="row-end" [class.neg]="p.balance < 0">{{ fmt(p.balance) }}</span>
+                <span class="row-end" [class.neg]="worth(p) < 0">{{ fmt(worth(p)) }}</span>
               </li>
             } @empty {
               <li class="empty">Nobody played this game.</li>
@@ -418,6 +449,10 @@
       }
     </div>
   </ion-footer>
+}
+
+@if (grabOpen() && grabOpen() === bank.grab()?.id && view() === 'active') {
+  <app-cash-grab (closed)="grabOpen.set(null)" />
 }
 
 @if (view() === 'ended') {
