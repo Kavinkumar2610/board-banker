@@ -80,8 +80,9 @@ export type GoRequest = PayRequest & { id: string };
 
 /** The banker throws `count` notes of `each` from the bank; players tap them to grab them. */
 export interface Grab { id: string; each: number; count: number; createdAt: Date | null }
-// The card: grab all the 100 notes from the bank and throw them. A set has 30 of each note.
+// The card: grab all the notes of one value from the bank and throw them. A set has 30 of each note.
 export const GRAB_NOTES = 30;
+/** The note value the banker's sheet starts at; they can type another. */
 export const GRAB_NOTE = 100;
 /** Everyone gets the same 3-2-1 before notes can be grabbed; the database rules enforce it on server time. */
 export const GRAB_COUNTDOWN_MS = 3000;

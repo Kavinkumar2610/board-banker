@@ -1,6 +1,17 @@
 import { AIError, GoogleAIBackend, Schema, getAI, getGenerativeModel } from 'firebase/ai';
+import { ReCaptchaEnterpriseProvider, initializeAppCheck } from 'firebase/app-check';
+import { environment } from '../environments/environment';
 import { app } from './firebase';
+import { recaptchaSiteKey } from './firebase.config';
 import { retry } from './money';
+
+// App Check proves a scan comes from this app, so nobody else can spend the free Gemini allowance. It starts here,
+// on the first scan, rather than at app start, so reCAPTCHA only loads for players who scan. Local development
+// (emulators) uses a registered debug token instead, since test browsers rarely pass reCAPTCHA's bot check.
+if (environment.appCheckDebugToken) {
+  (globalThis as { FIREBASE_APPCHECK_DEBUG_TOKEN?: string }).FIREBASE_APPCHECK_DEBUG_TOKEN = environment.appCheckDebugToken;
+}
+initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(recaptchaSiteKey), isTokenAutoRefreshEnabled: true });
 
 /** Google's "too many requests" and "model busy" answers clear within seconds; anything else is a real failure. */
 const busy = (e: unknown) => e instanceof AIError && [429, 500, 503].includes(e.customErrorData?.status ?? 0);

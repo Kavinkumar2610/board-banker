@@ -622,13 +622,12 @@ export class GamePage implements ViewDidEnter, ViewWillLeave {
 
   /** Banker: the bank throws all its notes of one value on the table and everyone scrambles for them. */
   protected async throwCash() {
-    const notes = `${GRAB_NOTES} ${fmt(GRAB_NOTE)} notes (${fmt(GRAB_NOTES * GRAB_NOTE)})`;
-    if (!(await this.confirm('Cash grab', `Throw all ${notes} from the bank? Everyone grabs at once. Notes nobody takes stay in the bank.`, 'Throw'))) return;
-    try {
-      await this.bank.startGrab();
-    } catch (e) {
-      await this.toast(errorText(e), 'danger');
-    }
+    await this.moneyModal({
+      title: 'Cash grab', party: { name: 'everyone', color: null, icon: 'cash' }, partyLabel: 'Throw to', initial: GRAB_NOTE,
+      hint: `The bank throws all ${GRAB_NOTES} notes of this value. Notes nobody grabs stay in the bank.`,
+      cta: n => (n ? `Throw all ${GRAB_NOTES} ${fmt(n)} notes · ${fmt(n * GRAB_NOTES)}` : 'Enter the note value'),
+      run: n => this.bank.startGrab(n), doneText: 'Cash thrown!', color: 'secondary',
+    });
   }
 
   protected async sendTo(p: Player) {

@@ -2,7 +2,7 @@
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/kavin26)
 
-A phone app (PWA) that replaces the paper money in property-trading board games. The banker starts a game and shows a QR code; 2 to 8 players join with their own phones. Players pay each other by showing and scanning payment QR codes, ask the banker for their GO salary (the banker approves it in a pop-up), pay the bank, and pay every other player at once when a card says so. The banker pays out from the bank, corrects balances, reverses mistakes and ends the game, and can throw a cash grab: the bank's 30 notes of 100 appear on every phone and the fastest tap takes each one. When the game ends, each player still in adds their property cards (scanned with the camera or typed in) with their houses and hotels, and the winner is decided by net worth. If the dice are missing, the banker can turn on digital dice so players roll on their phones.
+A phone app (PWA) that replaces the paper money in property-trading board games. The banker starts a game and shows a QR code; 2 to 8 players join with their own phones. Players pay each other by showing and scanning payment QR codes, ask the banker for their GO salary (the banker approves it in a pop-up), pay the bank, and pay every other player at once when a card says so. The banker pays out from the bank, corrects balances, reverses mistakes and ends the game, and can throw a cash grab: all 30 of the bank's notes of one value (the banker picks it) appear on every phone and the fastest tap takes each one. When the game ends, each player still in adds their property cards (scanned with the camera or typed in) with their houses and hotels, and the winner is decided by net worth. If the dice are missing, the banker can turn on digital dice so players roll on their phones.
 
 [![Play now](docs/play-now.svg)](https://board-banker-26.web.app)
 
@@ -19,7 +19,7 @@ Built with Ionic + Angular, Firebase (Firestore + anonymous auth) and Firebase H
 ## First-time Firebase setup
 
 1. In the [Firebase console](https://console.firebase.google.com/project/board-banker-26/authentication/providers), open **Authentication → Get started → Sign-in method → Anonymous → Enable**. Players never see a login; this gives each phone a private ID so the database rules can protect balances.
-2. For scanning property cards, open **AI Logic → Get started** and choose the **Gemini Developer API**. The app calls Gemini through Firebase, so no API key goes in the code. Without it, players type their properties in by hand.
+2. For scanning property cards, open **AI Logic → Get started** and choose the **Gemini Developer API**. The app calls Gemini through Firebase, so no API key goes in the code. Without it, players type their properties in by hand. Then protect it with **App Check**: create a reCAPTCHA Enterprise key (score-based, for your hosting domains and `localhost`), register the web app with it under **App Check → Apps**, add a debug token for local development, and put both in `src/app/firebase.config.ts`. Turn on enforcement for AI Logic once the App Check page shows verified requests.
 3. Deploy the app and the security rules: `npm run deploy`.
 
 The Firestore database is in `asia-southeast1` (Singapore), close to the players in Malaysia. Every money move is a round trip to it, so the region decides how fast payments feel. Firestore can't move a database to another region; changing it means deleting and recreating the database, which loses its data.

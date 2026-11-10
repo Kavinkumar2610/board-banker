@@ -6,7 +6,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import {
-  BankError, CURRENCIES, GRAB_NOTE, GRAB_NOTES, Game, GoRequest, Grab, KEEP_DAYS, Kind, MAX_PLAYERS, PayRequest, Player, TOKENS, Txn, fmt, newCode,
+  BankError, CURRENCIES, GRAB_NOTES, Game, GoRequest, Grab, KEEP_DAYS, Kind, MAX_PLAYERS, PayRequest, Player, TOKENS, Txn, fmt, newCode,
   quotaReset, rank, setCurrency,
 } from './money';
 
@@ -381,14 +381,14 @@ export class GameService {
 
   // ---- cash grab ---------------------------------------------------------------------------
 
-  /** The banker throws all the bank's notes of GRAB_NOTE. Notes nobody grabs simply stay in the bank. */
-  async startGrab() {
+  /** The banker throws all the bank's notes of one value. Notes nobody grabs simply stay in the bank. */
+  async startGrab(each: number) {
     const batch = writeBatch(db);
     batch.set(doc(collection(db, 'games', this.code()!, 'grabs')), {
-      each: GRAB_NOTE, count: GRAB_NOTES, createdAt: serverTimestamp(), expireAt: this.expireAt,
+      each, count: GRAB_NOTES, createdAt: serverTimestamp(), expireAt: this.expireAt,
     });
     batch.set(doc(collection(db, 'games', this.code()!, 'txns')), {
-      kind: 'grab', from: null, to: null, amount: GRAB_NOTE * GRAB_NOTES, by: this.uid(), at: serverTimestamp(), expireAt: this.expireAt,
+      kind: 'grab', from: null, to: null, amount: each * GRAB_NOTES, by: this.uid(), at: serverTimestamp(), expireAt: this.expireAt,
     });
     await batch.commit();
   }

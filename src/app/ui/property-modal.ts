@@ -38,6 +38,10 @@ type Field = 'mortgage' | 'house' | 'hotel';
           <ion-button expand="block" fill="outline" color="light" (click)="addBlank()" [disabled]="busy()">Add manually</ion-button>
           <input #picker type="file" accept="image/*" multiple hidden (change)="scan(picker)" />
         </div>
+        <p class="recaptcha-note">
+          Scanning is protected by reCAPTCHA. The Google <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>
+          and <a href="https://policies.google.com/terms" target="_blank" rel="noopener">Terms of Service</a> apply.
+        </p>
         @if (error()) {
           <p class="form-error" role="alert"><ion-icon name="alert-circle" aria-hidden="true" />{{ error() }}</p>
         }
@@ -94,6 +98,8 @@ type Field = 'mortgage' | 'house' | 'hotel';
   `,
   styles: `
     .add-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+    .recaptcha-note { margin: 0 0 8px; font-size: 12px; line-height: 1.45; color: var(--mb-muted); }
+    .recaptcha-note a { color: inherit; }
     .deeds { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 12px; }
     .deed { background: var(--mb-surface); border: 1px solid var(--mb-border); border-radius: var(--mb-radius); padding: 12px; }
     .deed-head { display: flex; align-items: center; gap: 8px; }

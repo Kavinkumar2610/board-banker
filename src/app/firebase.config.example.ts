@@ -8,3 +8,8 @@ export const firebaseConfig = {
   messagingSenderId: 'YOUR_SENDER_ID',
   appId: 'YOUR_APP_ID',
 };
+
+// App Check for card scanning: a reCAPTCHA Enterprise site key registered in Firebase console → App Check, and a
+// debug token (Manage debug tokens) so local development can scan. Keep the debug token out of git.
+export const recaptchaSiteKey = 'YOUR_RECAPTCHA_SITE_KEY';
+export const appCheckDebugToken = 'YOUR_DEBUG_TOKEN';

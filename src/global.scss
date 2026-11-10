@@ -397,3 +397,6 @@ button.row:disabled { cursor: default; }
     transition-duration: 0.01ms !important;
   }
 }
+
+// reCAPTCHA (App Check, card scanning only): the badge is hidden; the property sheet shows the notice Google requires instead.
+.grecaptcha-badge { visibility: hidden; }

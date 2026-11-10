@@ -822,12 +822,14 @@ async function cards() {
     await btn(siti, 'Cancel').click();
   });
 
-  await step('banker throws all 30 $100 notes; every phone gets them and a 3-2-1', async () => {
+  await step('banker picks the note value and throws all 30; every phone gets them and a 3-2-1', async () => {
     await kim.page.locator('ion-segment-button', { hasText: 'Bank' }).click();
     await btn(kim, 'Cash grab').click();
-    await kim.page.locator('ion-alert').getByText('Throw all 30 $100 notes ($3,000)').waitFor();
-    await shot(kim, 'grab-throw', 'Banker: the bank throws all 30 of its $100 notes, like the card says');
-    await alertBtn(kim, 'Throw').click();
+    await see(kim, 'Throw all 30 $100 notes · $3,000'); // the sheet starts at 100
+    await clearPad(kim);
+    await keypad(kim, 50);
+    await shot(kim, 'grab-throw', 'Banker: picks the note value; the bank throws all 30 of them');
+    await btn(kim, 'Throw all 30 $50 notes · $1,500').click();
     for (const p of [siti, ravi]) await see(p, 'Cash grab!');
     await siti.page.locator('app-cash-grab .count').waitFor();
     await shot(siti, 'grab-countdown', 'Every phone: the notes land, then the same 3-2-1 (timed by the server)');
@@ -849,7 +851,7 @@ async function cards() {
     // Straight from the database: the players' total went up by exactly what the bank threw.
     const res = await fetch(`${FIRESTORE}/games/${code}/players`, { headers: { Authorization: 'Bearer owner' } });
     const total = (await res.json()).documents.reduce((sum, d) => sum + Number(d.fields.balance.integerValue), 0);
-    if (total !== 7500) throw new Error(`players hold $${total}, expected $7,500`);
+    if (total !== 6000) throw new Error(`players hold $${total}, expected $6,000`);
     await shot(siti, 'grab-results', 'All grabbed: who got what; notes nobody grabs would stay in the bank');
   });
 
